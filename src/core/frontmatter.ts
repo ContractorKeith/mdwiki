@@ -39,6 +39,7 @@ function firstHeading(body: string) {
 // The document retains tokens/comments; public JSON represents unsafe integers lexically.
 export function frontmatter(content: string, path: string) {
   const diagnostics: Diagnostic[] = [];
+  const scalars: string[] = [];
   const invalidTypes = new Set<string>();
   const text = content.replace(/^\uFEFF/, '');
   let body = text;
@@ -72,6 +73,7 @@ export function frontmatter(content: string, path: string) {
             if (node.tag && !['tag:yaml.org,2002:str', 'tag:yaml.org,2002:int', 'tag:yaml.org,2002:float',
               'tag:yaml.org,2002:bool', 'tag:yaml.org,2002:null'].includes(node.tag)) throw new Error('Unsupported YAML tag.');
             const value: unknown = node.value;
+            if (value !== null) scalars.push(typeof value === 'string' ? value : node.source ?? String(value));
             if (typeof value === 'bigint') return value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)
               ? Number(value) : node.source ?? value.toString();
             if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Nonfinite YAML number.');
@@ -126,5 +128,9 @@ export function frontmatter(content: string, path: string) {
   }
   const title = !invalidTypes.has('title') && typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title
     : firstHeading(body) ?? path.split('/').at(-1)!.replace(/\.md$/i, '');
-  return { metadata, title, diagnostics };
+  const invalid = diagnostics.some((d) => d.code === 'INVALID_FRONTMATTER');
+  return { metadata, title, diagnostics, body: invalid ? content : body,
+    metadataText: invalid ? '' : scalars.join('\n'),
+    tags: !invalid && !invalidTypes.has('tags') && Array.isArray(metadata.tags)
+      && metadata.tags.every((tag) => typeof tag === 'string') ? metadata.tags as string[] : [] };
 }

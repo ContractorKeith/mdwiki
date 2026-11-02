@@ -7,7 +7,7 @@ import { operate, schemas } from './operations.js';
 const help = {
   name: 'mdwiki', version,
   usage: 'mdwiki [--vault DIR] [--index-dir DIR] [--json] COMMAND',
-  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'mcp'],
+  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'reindex', 'mcp'],
   options: ['--help, -h', '--version, -v', '--json', '--vault DIR', '--index-dir DIR'],
 };
 const helpText = `mdwiki ${version}
@@ -20,7 +20,9 @@ Commands:
   list [--limit N] [--cursor T]   List exact Markdown paths (default 50, max 200)
   tree [--depth N] [--limit N]    Browse paths (depth 3, max 200 entries)
   read PATH                      Read a whole note (max 10 MiB)
-  mcp                            Start stdio MCP with list/tree/read tools
+  search QUERY [--tag TAG]        Search words/phrases (also --limit/--cursor)
+  reindex [--full]                Reconcile or rebuild the disposable cache
+  mcp                            Start stdio MCP with read and search tools
 
 Options (before or after commands):
   --help, -h
@@ -32,11 +34,21 @@ Options (before or after commands):
 function parse(args: string[]) {
   const options: Record<string, string> = {};
   const positional: string[] = [];
+  const tags: string[] = [];
   let requested: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === '--') { positional.push(...args.slice(i + 1)); break; }
     if (arg === '--json') continue;
+    if (arg === '--full') {
+      if (options[arg]) throw new AppError('VALIDATION_ERROR', 'Duplicate --full.');
+      options[arg] = 'true'; continue;
+    }
+    if (arg === '--tag') {
+      const tag = args[++i];
+      if (!tag || tag.startsWith('--')) throw new AppError('VALIDATION_ERROR', 'Expected value for --tag.');
+      tags.push(tag); continue;
+    }
     if (['--help', '-h', '--version', '-v'].includes(arg)) {
       const next = arg === '--help' || arg === '-h' ? 'help' : 'version';
       if (requested && requested !== next) throw new AppError('VALIDATION_ERROR', 'Choose help or version.');
@@ -51,11 +63,13 @@ function parse(args: string[]) {
   const original = positional[0] ?? 'help';
   if (!help.commands.includes(original)) throw new AppError('VALIDATION_ERROR', `Unknown command: ${original}`);
   if (original === 'mcp' && args.includes('--json')) throw new AppError('VALIDATION_ERROR', 'mcp uses the stdio protocol; --json is not allowed.');
-  if (positional.length > (original === 'read' ? 2 : 1) || (original === 'read' && positional.length !== 2)) throw new AppError('VALIDATION_ERROR', 'Unexpected or missing positional argument.');
+  if (positional.length > (['read', 'search'].includes(original) ? 2 : 1) || (['read', 'search'].includes(original) && positional.length !== 2)) throw new AppError('VALIDATION_ERROR', 'Unexpected or missing positional argument.');
   if (!positional.length && !requested && Object.keys(options).length) throw new AppError('VALIDATION_ERROR', 'A command is required with vault options.');
+  if (tags.length && original !== 'search') throw new AppError('VALIDATION_ERROR', '--tag requires search.');
   for (const flag of Object.keys(options)) {
-    if (flag === '--limit' && ['list', 'tree'].includes(original)) continue;
-    if (flag === '--cursor' && original === 'list') continue;
+    if (flag === '--limit' && ['list', 'tree', 'search'].includes(original)) continue;
+    if (flag === '--cursor' && ['list', 'search'].includes(original)) continue;
+    if (flag === '--full' && original === 'reindex') continue;
     if (flag === '--depth' && original === 'tree') continue;
     if (['--vault', '--index-dir'].includes(flag)) continue;
     throw new AppError('VALIDATION_ERROR', `Option ${flag} does not apply to ${original}.`);
@@ -65,8 +79,10 @@ function parse(args: string[]) {
     const value = options['--' + name];
     if (value !== undefined) input[name] = name === 'cursor' ? value : /^\d+$/.test(value) ? Number(value) : NaN;
   }
+  if (original === 'search') { input.query = positional[1]; if (tags.length) input.tags = tags; }
+  if (original === 'reindex' && options['--full']) input.full = true;
   if (original === 'read') input.path = positional[1];
-  if (original === 'list' || original === 'tree' || original === 'read') {
+  if (original === 'list' || original === 'tree' || original === 'read' || original === 'search' || original === 'reindex') {
     const parsed = schemas[original].safeParse(input);
     if (!parsed.success) throw new AppError('VALIDATION_ERROR', 'Invalid command arguments.');
   }
@@ -88,7 +104,7 @@ try {
   } else {
     const result = command === 'help' ? success(help) : command === 'version' ? success({ name: 'mdwiki', version })
       : command === 'init' ? await initVault(selection)
-      : await operate(await selectVault(selection), command as 'list' | 'tree' | 'read', input);
+      : await operate(await selectVault(selection), command as keyof typeof schemas, input);
     if (args.includes('--json')) process.stdout.write(JSON.stringify(result) + '\n');
     else if (command === 'help') process.stdout.write(helpText);
     else if (command === 'version') process.stdout.write(`mdwiki ${version}\n`);
@@ -97,7 +113,8 @@ try {
       for (const entry of result.data.entries) process.stdout.write(entry.path + '\n');
       if ('next_cursor' in result.data && result.data.next_cursor) process.stderr.write(`Next cursor: ${result.data.next_cursor}\n`);
       if ('truncated' in result.data && result.data.truncated) process.stderr.write('Tree truncated; adjust --depth/--limit.\n');
-    } else process.stdout.write(`Initialized ${'vault' in result.data ? result.data.vault : ''}\n`);
+    } else if (command === 'reindex') process.stdout.write(JSON.stringify(result.data) + '\n');
+    else process.stdout.write(`Initialized ${'vault' in result.data ? result.data.vault : ''}\n`);
     if (!args.includes('--json')) for (const diagnostic of result.diagnostics) process.stderr.write(`${diagnostic.code}: ${diagnostic.message}\n`);
     if (result.degraded) process.exitCode = 6;
   }

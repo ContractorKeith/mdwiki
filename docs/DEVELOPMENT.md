@@ -1,6 +1,6 @@
 # Development
 
-M0 (#8) and M1 (#11) are merged, not published. Node 26.13.0 and npm
+M0 (#8) and M1 (#11) are merged. M2 is implemented pending review, not published. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 
@@ -123,20 +123,61 @@ without a response, and malformed protocol tools/list cursors may receive -32603
 Bounded callers must not wait indefinitely for a malformed-envelope reply. This is
 distinct from validated mdwiki_list cursor arguments; no protocol fork is used.
 
-src/index/schema.ts is private, not a CLI command or public raw-SQL interface.
-It creates only capability_fts and PRAGMA user_version=1 on an explicitly supplied
-disposable file, retains rows on reopen, and refuses incompatible versions without
-rewriting them. This is a capability/schema seam, not the final vault cache schema
-or a cache recovery implementation. Vault operations do not yet use this private capability cache.
+src/index owns SQL and schema version 2. `index.sqlite` stores the canonical vault,
+content generation, note hashes/metadata/diagnostics, exact tags, unreadable-file
+diagnostics and FTS5 documents. The former M0 capability schema requires a full
+rebuild. Schema definitions, SQLite quick_check and FTS integrity are checked on
+open. Every search reconciles first; unchanged bytes are read/hashed but neither
+parsed nor replaced in FTS. A batch updates notes, tags, FTS, diagnostics and its
+new opaque generation in one transaction. A failed directory traversal never
+publishes a partial successful scan. File read failures exclude old content and
+return degraded diagnostics; files disappearing mid-scan are distinct NOT_FOUND
+diagnostics. Normal missing files are removed during the next complete scan.
 
-The seam also refuses an ordinary table masquerading as `capability_fts`, preserving
-its original schema version and rows. This check does not replace M2's full cache
-schema validation and recovery work.
+All cooperating index access (including MCP startup) acquires `BEGIN IMMEDIATE`
+on a separate persistent `coordinator.sqlite`, then opens the data DB. An in-process
+queue prevents synchronous SQLite busy waits deadlocking concurrent MCP calls.
+The five-second busy timeout is bounded: another long scan may require a retry.
+Connections close before releasing the coordinator. SQLite releases ownership on
+process death; there is no PID lock or stale-lock stealing. Keep the coordinator
+inode stable: never unlink it while any process may be running.
+
+`reindex --full` builds a uniquely named staging DB from a complete discovery,
+checkpoints/closes it, removes only the old data DB's WAL/SHM/journal sidecars and
+atomically renames the staging DB to `index.sqlite` under that coordinator lock.
+It can replace corrupt/incompatible data even with other cooperating processes
+waiting. Failures before publication retain the previous data DB. Startup/call
+errors name the cache and the exact full-rebuild command. Unsafe cache symlinks,
+hard links and directory entries are refused. Full rebuilding does not recursively
+erase the index directory or touch notes. A crash can leave a `rebuild-*.sqlite`
+staging artifact; after stopping all mdwiki processes, such artifacts can be removed.
+
+The coordinator is operational coordination state, separate from disposable index
+data. If it is itself externally corrupted, stop **all** processes using that cache,
+remove only `coordinator.sqlite` and its `-journal`/`-wal`/`-shm` sidecars, then run
+`reindex --full`. Never do this while another process can hold its inode. Direct
+SQLite clients or external deletion/replacement of live cache files do not honor
+this protocol. This does not supply a filesystem transaction with arbitrary editors.
+M5 still owns watcher recovery and write concurrency; M2 implements only the
+coordination required for safe data-cache rebuilding.
+
+Search compiles words/phrases into quoted ANDed FTS clauses; punctuation is text
+separation. Titles have bm25 weight 8 versus 1 for other fields; ties sort by exact
+SQLite BINARY path order. Safe scalar YAML source values are flattened in document
+mapping/sequence order without keys; null contributes nothing. Invalid YAML uses
+raw content. FTS chooses the matching excerpt field; excerpts are character bounded
+around the match (at most 484 characters), including path/metadata-only hits. Scores
+are ranking hints. Search cursors bind canonical vault, generation, exact query,
+sorted/deduplicated exact tags and limit; malformed/stale/mismatched cursors fail.
+Queries allow 4096 characters/128 clauses, tags 50 x 256 characters, page sizes
+1–200 (default 50), cursors 2048 characters. No raw SQL interface is published.
 
 Tests use temporary directories with tiny fixtures, outside real vaults. Each child
 has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-Later milestones add index/search (M2), links (M3), writes
-(M4), watching/recovery (M5) and release/benchmark evidence (M6).
+Later milestones add links (M3), writes (M4), watching/recovery (M5) and
+release evidence plus benchmark comparison (M6).
+
+See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.

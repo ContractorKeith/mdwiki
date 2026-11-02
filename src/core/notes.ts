@@ -14,7 +14,7 @@ export function bound(value: unknown, fallback: number, max: number) {
   }
   return value;
 }
-async function scan(vault: Vault) {
+export async function scan(vault: Vault) {
   const notes: { path: string; size: number; mtime: string; ctime: string }[] = [];
   const folders: string[] = [];
   const directories = new Map<string, { dev: bigint; ino: bigint }>();
@@ -87,7 +87,7 @@ export async function treeNotes(vault: Vault, args: { depth?: unknown; limit?: u
   const truncated = visible.length > limit || visible.length < all.length;
   return success({ entries: visible.slice(0, limit), depth, limit, truncated, generation }, [], truncated);
 }
-export async function readNote(vault: Vault, path: unknown) {
+export async function readRawNote(vault: Vault, path: unknown) {
   const validate = async () => {
     await validateVault(vault);
     return exactNote(vault.root, path, vault.indexDir);
@@ -97,7 +97,10 @@ export async function readNote(vault: Vault, path: unknown) {
   let content: string;
   try { content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
   catch { throw new AppError('INVALID_UTF8', 'Note is not valid UTF-8.'); }
-  const parsed = frontmatter(content, path as string);
-  return success({ path: path as string, title: parsed.title, content,
-    content_version: digest(bytes), metadata: parsed.metadata }, parsed.diagnostics);
+  return { path: path as string, content, content_version: digest(bytes) };
+}
+export async function readNote(vault: Vault, path: unknown) {
+  const raw = await readRawNote(vault, path);
+  const parsed = frontmatter(raw.content, raw.path);
+  return success({ ...raw, title: parsed.title, metadata: parsed.metadata }, parsed.diagnostics);
 }
