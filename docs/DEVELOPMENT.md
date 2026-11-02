@@ -1,6 +1,6 @@
 # Development
 
-M0 (#8) and M1 (#11) are merged. M2 is implemented pending review, not published. Node 26.13.0 and npm
+M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15, not published. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 

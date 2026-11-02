@@ -21,7 +21,7 @@ remove only that owned directory after its processes stop.
 Measured 2026-11-02 on host `omarchy`, Linux x86_64, kernel 7.2.8-9-omarchy,
 AMD Ryzen 7 7730U with Radeon Graphics, 16 logical CPUs, 13.5 GiB RAM,
 Node v26.13.0, npm 11.20.0. Fixture and SQLite were on `/tmp` tmpfs.
-M2 implementation pending review; no macOS performance claim.
+M2 merged in PR #15; no macOS performance claim.
 
 | Operation | Elapsed | Peak process RSS | Observable result |
 |---|---:|---:|---|
