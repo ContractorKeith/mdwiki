@@ -26,7 +26,7 @@ async function readConfig(path: string): Promise<Config> {
     throw new AppError('CONFIG_ERROR', 'Invalid mdwiki config or vault binding.', 5);
   }
 }
-async function bind(indexDir: string, root: string) {
+async function bind(indexDir: string, root: string, readOnly = false) {
   await safeLocation(indexDir);
   const binding = join(indexDir, 'vault.json');
   await safeFile(binding);
@@ -35,9 +35,15 @@ async function bind(indexDir: string, root: string) {
     if (config.vault !== root || config.index_dir !== indexDir) {
       throw new AppError('CONFLICT', 'Cache directory is bound to another vault or location.', 4);
     }
-  } else {
+  } else if (!readOnly) {
     await mkdir(indexDir, { recursive: true });
-    await writeFile(binding, JSON.stringify({ schema_version: 1, vault: root, index_dir: indexDir }) + '\n', { flag: 'wx' });
+    try {
+      await writeFile(binding, JSON.stringify({ schema_version: 1, vault: root, index_dir: indexDir }) + '\n', { flag: 'wx' });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      // Another cooperating process may have bound the same new cache first.
+      await bind(indexDir, root, true);
+    }
   }
 }
 async function selectedRoot(selection: Selection) {
@@ -54,7 +60,7 @@ async function selectedRoot(selection: Selection) {
     current = parent;
   }
 }
-export async function selectVault(selection: Selection): Promise<Vault> {
+export async function selectVault(selection: Selection, readOnly = false): Promise<Vault> {
   const root = await selectedRoot(selection);
   const identity = await lstat(root, { bigint: true });
   const metadata = join(root, '.mdwiki');
@@ -66,7 +72,7 @@ export async function selectVault(selection: Selection): Promise<Vault> {
     : resolve(selection.cwd ?? process.cwd(), selection.indexDir);
   indexDir = await safeLocation(indexDir);
   if (indexDir === root) throw new AppError('VALIDATION_ERROR', 'Cache directory cannot be the vault root.');
-  await bind(indexDir, root);
+  await bind(indexDir, root, readOnly);
   const vault = { root, indexDir, identity: { dev: identity.dev, ino: identity.ino } };
   await validateVault(vault);
   return vault;
@@ -91,4 +97,10 @@ export async function initVault(selection: Selection) {
   if (!prior) await writeFile(configPath, JSON.stringify({ schema_version: 1, vault: root, index_dir: indexDir }) + '\n', { flag: 'wx' });
   if (!(await exists(join(metadata, '.gitignore')))) await writeFile(join(metadata, '.gitignore'), '*\n', { flag: 'wx' });
   return success({ vault: root, index_dir: indexDir });
+}
+
+// Bind only when a real indexed operation needs storage; previews never call this.
+export async function bindCache(vault: Vault) {
+  await validateVault(vault);
+  await bind(vault.indexDir, vault.root);
 }

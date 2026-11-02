@@ -3,7 +3,7 @@ import type { Diagnostic } from '../output.js';
 
 type Value = string | number | boolean | null | Value[] | { [key: string]: Value };
 // Extract a heading without interpreting fenced code or YAML as a title.
-function firstHeading(body: string) {
+export function firstHeading(body: string) {
   let fence: string | undefined;
   let previous = '';
   let comment = false;
