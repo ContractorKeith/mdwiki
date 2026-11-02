@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-import { mkdtemp, mkdir, writeFile, readFile, rm, stat, utimes, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, stat, utimes, symlink, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,7 +12,7 @@ const core = process.env.MDWIKI_TEST_CORE ?? new URL('../dist/', import.meta.url
 const { initVault, selectVault } = await import(pathToFileURL(join(core, 'core/vault.js')));
 const { operate } = await import(pathToFileURL(join(core, 'operations.js')));
 async function fixture(t) {
-  const cwd = await mkdtemp(join(tmpdir(), 'mdwiki-search-'));
+  const cwd = await realpath(await mkdtemp(join(tmpdir(), 'mdwiki-search-')));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const vault = join(cwd, 'vault');
   await mkdir(vault);
