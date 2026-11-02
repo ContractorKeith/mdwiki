@@ -6,12 +6,14 @@ watching. Existing vault files are authoritative; the index is disposable. This
 separate project deliberately practices agent implementation, review, and testing.
 
 ## Status
-Planning scaffold — 2026-11-02. No application implemented yet. M0 is next.
+M0 runtime and harness implemented pending review — 2026-11-02. Not merged.
+Vault product behavior remains planned for M1–M6.
 
 ## Commands
-`bash scripts/accept.sh` is the shared acceptance entry point. Until M0 it checks
-the planning scaffold only. M0 must replace that with typecheck, lint, build,
-tests, and installed-package smoke tests; CI runs the same command on macOS/Linux.
+Node >=26.13.0 <27 (.nvmrc: 26.13.0), npm 11.20.0. Run `npm ci`, then
+`bash scripts/accept.sh`: typecheck, lint, build, tests, npm pack and isolated
+installed-package CLI/MCP/SQLite checks. CI runs the same gate on macOS/Linux.
+See `docs/DEVELOPMENT.md` for individual commands and dependency rationale.
 
 ## Pointers
 - `CONTEXT.md` — project glossary.

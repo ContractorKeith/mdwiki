@@ -1,0 +1,29 @@
+{
+  "name": "mdwiki",
+  "version": "0.1.0",
+  "description": "Local-first Markdown knowledge base (M0 runtime harness)",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "mdwiki": "dist/cli.js" },
+  "files": ["dist/", "README.md", "LICENSE"],
+  "engines": { "node": ">=26.13.0 <27" },
+  "packageManager": "npm@11.20.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test tests/*.test.mjs",
+    "test:installed": "node scripts/package-smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.6",
+    "eslint": "10.14.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

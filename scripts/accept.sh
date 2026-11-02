@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Planning-only acceptance. M0 replaces this with the real application gate.
-set -eu
+# Shared local/CI gate; npm ci is a separate prerequisite.
+set -euo pipefail
 cd "$(dirname "$0")/.."
-test -s AGENTS.md
-test -s CONTEXT.md
-test -s docs/PLAN.md
-test -s docs/features/v0.1/SPEC.md
-test -s LICENSE
-test "$(cat CLAUDE.md)" = '@AGENTS.md'
-printf '%s\n' 'Planning scaffold checked; no application tests exist until M0.'
+node --input-type=module -e '
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  if (major !== 26 || minor < 13) {
+    throw new Error("mdwiki requires Node >=26.13.0 <27; use .nvmrc");
+  }
+'
+npm run typecheck
+npm run lint
+npm run build
+npm test
+npm run test:installed
