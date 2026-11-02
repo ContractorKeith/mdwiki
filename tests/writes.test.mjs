@@ -192,8 +192,12 @@ test('MCP previews do not mutate startup state; writes share envelopes and repor
   await mkdir(second);
   await initVault({ vault: second, indexDir: external });
   await rm(external, { recursive: true });
+  await writeFile(join(second, 'existing.md'), 'read-only session');
   const before = await snapshot(scratch);
   const { peer, call } = await peerSession(t, second);
+  assert.equal((await call('list', {})).data.entries.length, 1);
+  assert.equal((await call('tree', {})).data.entries.length, 1);
+  assert.equal((await call('read', { path: 'existing.md' })).data.content, 'read-only session');
   assert.equal((await call('write', { path: 'nested/new.md', content: '# Preview', dry_run: true })).data.file_written, false);
   assert.deepEqual(await snapshot(scratch), before);
   for (const [name, args] of [['write', { path: 'x.md' }], ['append', { path: 'x.md', content: 4 }], ['write', { path: 'x.md', content: 'x', expected_version: 'bad' }]]) assert.equal((await call(name, args)).error.code, 'VALIDATION_ERROR');

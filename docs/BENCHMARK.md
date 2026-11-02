@@ -86,3 +86,38 @@ All are within existing budgets. Against the recorded M3 run, elapsed times were
 runs do not establish statistical equivalence or a speedup. No graph-heavy or
 mutation-throughput workload is measured, and no macOS benchmark claim is made.
 M4 correctness is checked separately with bounded deterministic write fixtures.
+
+
+## M5 integration comparison (pending review)
+
+Reran the unchanged `npm run benchmark` fixture, worker limits and budgets on
+2026-11-02: Omarchy Linux x86_64, kernel 7.2.8-9-omarchy, Ryzen 7 7730U,
+16 logical CPUs, 13.5 GiB RAM, Node v26.13.0/npm 11.20.0. Final acceptance and
+benchmark commands ran sequentially. Shared `/tmp` returned write-quota errors
+(errno -122) during verification, so the final gate and benchmark used `TMPDIR`
+inside an owned workspace mkdtemp directory on `/home` btrfs, removed afterward.
+This differs from the earlier tmpfs measurements and limits direct comparison.
+
+The fixture remains exactly 10,000 notes/100 folders and 10,476,780 note bytes.
+Total generated fixture/cache size was 31,334,164 logical bytes, below 100 MiB;
+longer workspace path binding strings account for the small total-size difference.
+No fixture, script, worker timeout or budget was changed.
+
+| Operation | M4 elapsed / RSS | M5 elapsed / RSS | Result |
+|---|---|---|---|
+| Cold index | 11,259 ms / 134.9 MiB | 12,551 ms / 135.1 MiB | 10,000 added |
+| Unchanged reconciliation | 9,109 ms / 99.9 MiB | 9,923 ms / 111.7 MiB | 10,000 unchanged |
+| Search including reconciliation | 9,674 ms / 99.9 MiB | 9,894 ms / 111.5 MiB | 50 hits |
+
+Elapsed changes against the recorded M4 run are +1,292/+814/+220 ms; RSS changes
+are +0.2/+11.8/+11.6 MiB. All remain within the unchanged 25/20/22-second and
+256-MiB investigation budgets. These single runs with different filesystems and
+uncontrolled host load cannot isolate a code regression or establish equivalence.
+An earlier run overlapped acceptance work and was replaced by this sequential
+measurement; do not use its contention-inflated timings as a product baseline.
+No material budget regression was observed in the final run.
+
+M5 preserves per-call read/hash reconciliation for correctness with other processes;
+watching does not remove that cost. This fixture activates no long-lived watcher
+and contains no wikilinks or mutations. Graph-heavy throughput, watch scale and
+mutation throughput remain unmeasured. No macOS benchmark claim is made.

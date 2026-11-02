@@ -9,7 +9,7 @@ import { operate, schemas } from './operations.js';
 const help = {
   name: 'mdwiki', version,
   usage: 'mdwiki [--vault DIR] [--index-dir DIR] [--json] COMMAND',
-  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex', 'mcp'],
+  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex', 'watch', 'mcp'],
   options: ['--help, -h', '--version, -v', '--json', '--vault DIR', '--index-dir DIR'],
 };
 const helpText = `mdwiki ${version}
@@ -27,6 +27,7 @@ Commands:
   write PATH --file FILE_OR_DASH  Create; --expected-version HASH replaces
   append PATH --file FILE_OR_DASH Append latest body (both accept --dry-run)
   reindex [--full]                Reconcile or rebuild the disposable cache
+  watch                          Watch external edits (JSON Lines with --json)
   mcp                            Start stdio MCP with reads, search, backlinks and writes
 
 Options (before or after commands):
@@ -120,16 +121,25 @@ async function inputFile(file: string) {
     catch { throw new AppError('INVALID_UTF8', 'Input is not valid UTF-8.'); }
   } finally { await handle?.close(); }
 }
-process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+const outputError = (error: NodeJS.ErrnoException) => {
   if (error.code === 'EPIPE') process.exit(0);
   process.stderr.write('OUTPUT_ERROR: Could not write stdout.\n');
   process.exit(5);
-});
+};
+process.stdout.on('error', outputError);
+let watching = false;
 try {
   const args = process.argv.slice(2);
   const { command, selection, input, file } = parse(args);
   if ((command === 'write' || command === 'append') && file) input.content = await inputFile(file);
-  if (command === 'mcp') {
+  if (command === 'watch') {
+    watching = true;
+    const vault = await selectVault(selection, true);
+    process.stdout.off('error', outputError);
+    const { watchCli } = await import('./watch-cli.js');
+    await watchCli(vault, args.includes('--json'));
+  } else if (command === 'mcp') {
+    process.stdout.off('error', outputError);
     const { serve } = await import('./mcp.js');
     await serve(await selectVault(selection, true));
   } else {
@@ -153,7 +163,8 @@ try {
   }
 } catch (error) {
   const result = errorResult(error);
-  if (process.argv.slice(2).includes('--json')) process.stdout.write(JSON.stringify(result) + '\n');
+  if (watching && process.argv.includes('--json')) process.stdout.write(JSON.stringify({ schema_version: 1, event: 'error', sequence: 1, timestamp: new Date().toISOString(), data: result.error, diagnostics: [], degraded: true }) + '\n');
+  else if (process.argv.slice(2).includes('--json')) process.stdout.write(JSON.stringify(result) + '\n');
   else process.stderr.write(`${result.error.code}: ${result.error.message}\n`);
-  process.exitCode = error instanceof AppError ? error.exit : 5;
+  process.exitCode = watching ? 5 : error instanceof AppError ? error.exit : 5;
 }

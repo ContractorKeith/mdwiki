@@ -27,7 +27,7 @@ test('help and version in human and JSON forms from a disposable cwd', async (t)
     assert.equal(body.degraded, false);
     assert.deepEqual(body.diagnostics, []);
     assert.equal(body.data.version, version);
-    if (args.includes('help')) assert.deepEqual(body.data.commands, ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex', 'mcp']);
+    if (args.includes('help')) assert.deepEqual(body.data.commands, ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex', 'watch', 'mcp']);
   }
   assert.deepEqual(await readdir(cwd), []);
 });

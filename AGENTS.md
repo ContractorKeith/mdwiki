@@ -7,7 +7,7 @@ separate project deliberately practices agent implementation, review, and testin
 
 ## Status
 M0 runtime/harness (#8) and M1 vault read path (#11) merged — 2026-11-02.
-M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5–M6 remain planned; no release published.
+M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 is implemented pending review; M6 remains planned; no release published.
 
 ## Commands
 Node >=26.13.0 <27 (.nvmrc: 26.13.0), npm 11.20.0. Run `npm ci`, then

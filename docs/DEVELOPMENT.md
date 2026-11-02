@@ -158,7 +158,7 @@ remove only `coordinator.sqlite` and its `-journal`/`-wal`/`-shm` sidecars, then
 `reindex --full`. Never do this while another process can hold its inode. Direct
 SQLite clients or external deletion/replacement of live cache files do not honor
 this protocol. This does not supply a filesystem transaction with arbitrary editors.
-M5 still owns watcher recovery; M4 adds mutation coordination. M2 implements only the
+M5 adds watcher recovery; M4 adds mutation coordination. M2 implements only the
 coordination required for safe data-cache rebuilding.
 
 Search compiles words/phrases into quoted ANDed FTS clauses; punctuation is text
@@ -177,8 +177,8 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-M4 writes are merged in PR #17; later milestones add watching/recovery (M5) and
-release evidence plus benchmark comparison (M6).
+M4 writes are merged in PR #17; M5 watching/recovery is implemented pending review;
+M6 owns release evidence.
 
 See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.
 
@@ -239,7 +239,7 @@ CLI selection and MCP startup use read-only binding validation. Cache creation a
 reconciliation are deferred to actual indexed operations; each indexed read still
 reconciles first. This intentionally defers the earlier eager MCP startup sync to
 make preview-only sessions side-effect-free, including vanished external caches.
-M5 must preserve that property when adding watcher startup. A real write revalidates
+M5 preserves that property with lazy watcher startup. A real write revalidates
 and publishes before reconciliation. Post-publication indexing or finalization
 errors preserve explicit file success and its version, with degraded diagnostics.
 Never retry a published append just because cache work failed.
@@ -253,3 +253,33 @@ remain outside the protocol: path/content checks narrow but cannot eliminate the
 last check-to-rename race. No atomic external compare-and-swap claim is made.
 Linux results are local; macOS evidence requires the CI job. Watcher recovery and
 graph-heavy performance workloads are not claimed by M4.
+
+## M5 watch lifecycle (pending review)
+
+`core/watch.ts` attaches built-in recursive filesystem notifications with exclusions
+before descent on Node's recursive implementation. `watch.ts` owns the shared
+application queue, debounce, attachment/scan race, periodic reconciliation and
+bounded retries. `watch-cli.ts` translates lifecycle events and termination;
+MCP injects the same index runner into application operations. Writes publish and
+release the mutation lock before lazy activation. No dependency or schema change.
+See README for exact event fields, timers, retry/restart and platform limits.
+
+Every indexed operation still hashes all eligible files. This favors correctness
+across processes and missed notifications; it does not claim lower search latency.
+At most one background pass is queued; continuous edits can require repeated scans
+before an indexed call can return without known dirty work. Shutdown closes timers
+and notifications immediately and awaits in-flight bounded filesystem/index work.
+The five-second coordinator wait still applies; shutdown is not cancellation of an
+already executing SQLite statement or filesystem request.
+
+The M5 fixture suite runs through source and installed package paths. Real CLI
+watch events and real initialized MCP cache commits are observable handshakes;
+controlled attachment/scan failures and short test-only scan intervals cover
+missed events, dirty responses and bounded retries. A real rebuild is paused before
+staging publication, excludes a reader, and is killed: old data stays complete,
+the stable coordinator is reused, then concurrent reader/rebuild processes recover.
+M4 cooperating append/live mutation holder and complete preview snapshots remain.
+Do not delete live coordinators; externally corrupt coordinators still require all
+processes to stop before the documented manual removal. Staging artifacts from a
+killed rebuild remain for manual cleanup after processes stop. No external cache
+directory is recursively erased. macOS evidence must come from actual CI.

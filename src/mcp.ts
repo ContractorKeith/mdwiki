@@ -4,10 +4,20 @@ import { z } from 'zod';
 import { schemas, toolResult } from './operations.js';
 import type { Vault } from './core/vault.js';
 import { NOTE_LIMIT } from './core/paths.js';
+import { WatchSession } from './watch.js';
 import { version } from './metadata.js';
 
 export async function serve(vault: Vault): Promise<void> {
-  // Defer cache work to indexed calls: a preview-only session is read-only.
+  const watcher = new WatchSession(vault, { emit: (event) => {
+    if (event.event === 'diagnostic' || event.event === 'error') process.stderr.write(`${event.data.code}: ${event.data.message}\n`);
+  } });
+  const transport = new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 6 * NOTE_LIMIT + 64 * 1024 });
+  const closeTransport = transport.close.bind(transport);
+  transport.close = async () => {
+    void watcher.close('transport closed', false);
+    process.stdin.pause();
+    await closeTransport();
+  };
   const handle = serveStdio(() => {
     const server = new McpServer({ name: 'mdwiki', version }, { capabilities: { tools: {} } });
     for (const operation of ['list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex'] as const) {
@@ -24,7 +34,7 @@ export async function serve(vault: Vault): Promise<void> {
       server.registerTool(`mdwiki_${operation}`, {
         description: `${operation} notes in the selected vault`, inputSchema,
       }, async (input) => {
-        const result = await toolResult(vault, operation, input);
+        const result = await toolResult(vault, operation, input, (_vault, args) => watcher.run(args));
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           structuredContent: result, isError: !result.ok };
       });
@@ -32,12 +42,16 @@ export async function serve(vault: Vault): Promise<void> {
     return server;
   }, {
     // JSON may escape each input byte as six characters; retain framing headroom.
-    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 6 * NOTE_LIMIT + 64 * 1024 }),
+    transport,
     onerror: () => { process.stderr.write('MCP_PROTOCOL_ERROR: Invalid stdio message.\n'); },
   });
 
   // The SDK closes on stdin EOF; signals also release its transport listeners.
+  let stopping = false;
   const stop = () => {
+    if (stopping) return;
+    stopping = true;
+    void watcher.close('stdio closed', false);
     void handle.close().then(() => {
       process.stdin.pause();
     }).catch(() => {
@@ -45,6 +59,10 @@ export async function serve(vault: Vault): Promise<void> {
       process.exitCode = 5;
     });
   };
+  process.stdin.once('end', stop);
+  process.stdin.once('close', stop);
+  process.stdout.once('close', stop);
+  process.stdout.on('error', stop);
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 }

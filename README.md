@@ -5,7 +5,7 @@ complement an existing editor; files remain the source of truth.
 
 M1 vault initialization, browsing and reading are merged in PR #11.
 M2 incremental indexing and search are merged in PR #15. Not published.
-M3 backlinks are merged in PR #16; M4 writes are merged in PR #17. Watching remains planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
+M3 backlinks are merged in PR #16; M4 writes are merged in PR #17. M5 watching/recovery is implemented pending review; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
 
 Requires Node.js **26.13.0** (LTS; supported line: >=26.13.0 <27) and npm.
 Development uses npm 11.20.0.
@@ -167,19 +167,61 @@ check-to-publication window can still be overwritten. This is not atomic
 compare-and-swap with Obsidian or arbitrary filesystem changes.
 
 `reindex` reconciles additions, edits and removals. Every indexed call rereads and
-hashes eligible bytes; unchanged content skips parsing and FTS replacement. Until
-M5 adds watching, search and backlinks reconcile each call. MCP defers cache creation/reconciliation
-until an indexed call so a preview-only session has no filesystem side effects.
+hashes eligible bytes; unchanged content skips parsing and FTS replacement. Search
+and backlinks reconcile each call. MCP defers cache creation, reconciliation
+and watcher attachment until its first indexed operation or successful real write,
+so initialize/list/tree/read/preview-only sessions have no filesystem side effects.
 Invalid YAML uses raw-text search with diagnostics. Unreadable notes are excluded
 from current hits with diagnostics; traversal failures fail the operation.
 
 The vault-bound cache is disposable. Missing `index.sqlite` builds automatically;
-corrupt/incompatible data requires `reindex --full` with the same vault/index-dir.
+CLI corrupt/incompatible data errors name `reindex --full` with the same vault/index-dir.
+An active watcher diagnoses these failures and retries with a coordinated full rebuild.
 Full rebuild stages a complete database, then replaces only cache artifacts while
 holding a persistent SQLite coordinator transaction. Cooperating processes wait
 up to five seconds, then return an actionable retry error. Never delete the
 coordinator or cache directory while mdwiki is running; see the recovery details
 in [development notes](docs/DEVELOPMENT.md). Notes are never modified by indexing.
+
+Watch external edits with `mdwiki --vault DIR watch` or `watch --json`. Keep stdin
+open; EOF, SIGINT and SIGTERM stop it cleanly (exit 0). An unattended launcher must
+provide an open input stream. This is a foreground process, not an installed service.
+
+JSON mode writes one event per line, with exactly `schema_version: 1`, `event`,
+`sequence` (increasing per process), UTC `timestamp`, `data`, `diagnostics` and
+`degraded`. Text mode prints readable event names/data and diagnostics on stderr.
+
+| Event | Data and meaning |
+|---|---|
+| `ready` | Canonical `vault` and `generation`, after attachment and initial sync |
+| `sync` | `generation`, `added`, `changed`, `removed`, after a committed changed batch |
+| `diagnostic` | Stable `code`, actionable `message`, `retry: true`; operational retries also include `attempt` and `retry_ms` |
+| `stopped` | `reason` on orderly shutdown |
+| `error` | Stable `code` and `message`; fatal failure cleans resources and exits 5 |
+
+Unchanged scans emit nothing. Notifications are debounced for 75 ms; every five
+seconds a full read/hash reconciliation also catches missed events and retries
+unreadable notes. Unchanged note bytes skip parsing/FTS updates. Attachment precedes
+the first scan; notifications during scanning trigger another pass. Indexed MCP
+calls await the queue and any known dirty work before responding. Each indexed
+call still reconciles, including when another process changed the shared cache;
+M5 does not claim a reduced per-call hashing cost.
+
+The implementation uses Node's built-in watcher on macOS/Linux, excluding hidden
+paths, symlink entries and the active cache. Notifications can be coalesced or lost,
+and network/virtual filesystems may not support watching reliably. The periodic
+fallback improves eventual recovery; it cannot provide an atomic filesystem
+snapshot with external editors. OS watcher/access failures are visible and trigger
+reattachment. Operational failures retry after 250/500 ms and stop after three
+consecutive failures; then restart after fixing access/OS limits. An MCP process
+keeps direct reads available but rejects indexed calls after fatal watch failure;
+restart it to reactivate watching. Unreadable-note diagnostics remain degraded,
+exclude stale results and retry at the normal scan interval; repeated identical
+diagnostics do not flood output. Cache corruption/incompatibility is diagnosed
+before a coordinated staged rebuild; unsafe cache paths are never overwritten.
+A published write remains successful even if activation/reconciliation fails.
+Stdout pipe closure stops without further events or a stack trace. MCP writes only
+protocol messages to stdout and reports watch diagnostics on stderr.
 
 MCP clients launch the installed binary with `--vault DIR mcp`. Initialize the
 vault through CLI first. The tools are exactly `mdwiki_list`, `mdwiki_tree`,
