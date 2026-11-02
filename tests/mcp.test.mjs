@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile, symlink, rename, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -144,3 +144,28 @@ test('SDK scalar params are diagnosed while subsequent valid envelopes remain us
   assert.match(result.stderr, /MCP_PROTOCOL_ERROR/);
   peer.assertClean();
 });
+
+for (const replacement of ['symlink', 'directory']) {
+  test(`MCP rejects a replaced vault root: ${replacement}`, async (t) => {
+    const { peer, cwd } = await session(t);
+    const moved = cwd + '-original';
+    const outside = cwd + '-outside';
+    t.after(() => Promise.all([moved, outside].map((path) => rm(path, { recursive: true, force: true }))));
+    await rename(cwd, moved);
+    await mkdir(outside);
+    await writeFile(join(outside, 'private.md'), 'OUTSIDE_SENTINEL');
+    if (replacement === 'symlink') await symlink(outside, cwd);
+    else { await mkdir(cwd); await writeFile(join(cwd, 'private.md'), 'OUTSIDE_SENTINEL'); }
+    let id = 100;
+    for (const [name, args] of [['list', {}], ['tree', {}], ['read', { path: 'private.md' }]]) {
+      const reply = await peer.request(id++, 'tools/call', { name: 'mdwiki_' + name, arguments: args });
+      assert.equal(reply.result.isError, true);
+      assert.equal(reply.result.structuredContent.error.code, 'UNSAFE_PATH');
+      assert.ok(!JSON.stringify(reply).includes('OUTSIDE_SENTINEL'));
+    }
+    assert.deepEqual((await peer.request(id, 'ping')).result, {});
+    peer.child.stdin.end();
+    assert.equal((await peer.closed).code, 0);
+    peer.assertClean();
+  });
+}

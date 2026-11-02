@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { AppError, success } from '../output.js';
 import { exactNote, notePath, NOTE_LIMIT, readBounded } from './paths.js';
 import { frontmatter } from './frontmatter.js';
-import type { Vault } from './vault.js';
+import { validateVault, type Vault } from './vault.js';
 
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 export function bound(value: unknown, fallback: number, max: number) {
@@ -18,6 +18,7 @@ async function scan(vault: Vault) {
   const notes: { path: string; size: number; mtime: string; ctime: string }[] = [];
   const folders: string[] = [];
   const walk = async (directory: string, prefix: string) => {
+    await validateVault(vault);
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (entry.name.startsWith('.') || entry.name.includes('\\') || entry.isSymbolicLink()) continue;
       const absolute = join(directory, entry.name);
@@ -35,6 +36,7 @@ async function scan(vault: Vault) {
     }
   };
   await walk(vault.root, '');
+  await validateVault(vault);
   notes.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   folders.sort();
   return { notes, folders, generation: digest(JSON.stringify({ notes, folders })) };
@@ -67,8 +69,12 @@ export async function treeNotes(vault: Vault, args: { depth?: unknown; limit?: u
   return success({ entries: visible.slice(0, limit), depth, limit, truncated, generation }, [], truncated);
 }
 export async function readNote(vault: Vault, path: unknown) {
-  const absolute = await exactNote(vault.root, path, vault.indexDir);
-  const bytes = await readBounded(absolute, NOTE_LIMIT, () => exactNote(vault.root, path, vault.indexDir));
+  const validate = async () => {
+    await validateVault(vault);
+    return exactNote(vault.root, path, vault.indexDir);
+  };
+  const absolute = await validate();
+  const bytes = await readBounded(absolute, NOTE_LIMIT, validate);
   let content: string;
   try { content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
   catch { throw new AppError('INVALID_UTF8', 'Note is not valid UTF-8.'); }

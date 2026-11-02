@@ -1,10 +1,17 @@
-import { mkdir, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { AppError, success } from '../output.js';
 import { exists, readBounded, safeFile, safeLocation, vaultRoot } from './paths.js';
 
 export interface Selection { vault?: string; indexDir?: string; cwd?: string }
-export interface Vault { root: string; indexDir: string }
+export interface Vault { root: string; indexDir: string; identity: { dev: bigint; ino: bigint } }
+// Pin the physical root for this process; a pathname alone can be replaced.
+export async function validateVault(vault: Vault) {
+  const state = await lstat(vault.root, { bigint: true }).catch(() => undefined);
+  if (!state?.isDirectory() || state.dev !== vault.identity.dev || state.ino !== vault.identity.ino) {
+    throw new AppError('UNSAFE_PATH', 'Selected vault root was removed or replaced.');
+  }
+}
 interface Config { schema_version: 1; vault: string; index_dir: string }
 async function readConfig(path: string): Promise<Config> {
   await safeFile(path);
@@ -49,6 +56,7 @@ async function selectedRoot(selection: Selection) {
 }
 export async function selectVault(selection: Selection): Promise<Vault> {
   const root = await selectedRoot(selection);
+  const identity = await lstat(root, { bigint: true });
   const metadata = join(root, '.mdwiki');
   await safeLocation(metadata);
   if (!(await exists(join(metadata, 'config.json')))) throw new AppError('NOT_FOUND', 'Vault is not initialized.', 3);
@@ -59,7 +67,9 @@ export async function selectVault(selection: Selection): Promise<Vault> {
   indexDir = await safeLocation(indexDir);
   if (indexDir === root) throw new AppError('VALIDATION_ERROR', 'Cache directory cannot be the vault root.');
   await bind(indexDir, root);
-  return { root, indexDir };
+  const vault = { root, indexDir, identity: { dev: identity.dev, ino: identity.ino } };
+  await validateVault(vault);
+  return vault;
 }
 export async function initVault(selection: Selection) {
   if (!selection.vault) throw new AppError('VALIDATION_ERROR', 'init requires --vault DIR.');

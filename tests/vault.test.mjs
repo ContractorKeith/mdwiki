@@ -180,9 +180,30 @@ test('read title uses valid metadata, then the first body heading outside code, 
     ['---\ncustom: |\n  # YAML heading\n---\n# Body heading\n', 'Body heading'],
     ['Setext heading\n===\n', 'Setext heading'],
     ['# Hello#\n', 'Hello#'],
+    ['<!--\n# Hidden comment\n-->\n# Visible title\n', 'Visible title'],
+    ['<!-- unclosed\n# Hidden\n', 'title'],
+    ['```\n<!--\n```\n# Visible\n', 'Visible'],
   ];
   for (const [content, title] of cases) {
     await writeFile(join(vault, 'title.md'), content);
     assert.equal((await readNote(selected, 'title.md')).data.title, title);
   }
+});
+
+test('managed YAML types are checked before unsafe integer JSON conversion, including aliases', async (t) => {
+  const { vault } = await fixture(t);
+  await initVault({ vault });
+  const selected = await selectVault({ vault });
+  for (const value of ['42', '9007199254740993', '*number']) {
+    await writeFile(join(vault, 'types.md'), `---\ncustom: &number 9007199254740993\ntitle: ${value}\ntags: [${value}]\n---\n# Actual title\n`);
+    const result = await readNote(selected, 'types.md');
+    assert.equal(result.degraded, true);
+    assert.deepEqual(result.diagnostics.map((d) => d.message), ['Invalid managed field: title.', 'Invalid managed field: tags.']);
+    assert.equal(result.data.title, 'Actual title');
+    assert.equal(result.data.metadata.custom, '9007199254740993');
+  }
+  await writeFile(join(vault, 'types.md'), '---\ntitle: &text "9007199254740993"\ntags: [*text]\n---\n# Body\n');
+  const quoted = await readNote(selected, 'types.md');
+  assert.equal(quoted.degraded, false);
+  assert.equal(quoted.data.title, '9007199254740993');
 });

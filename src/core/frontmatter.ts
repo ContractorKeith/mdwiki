@@ -6,14 +6,26 @@ type Value = string | number | boolean | null | Value[] | { [key: string]: Value
 function firstHeading(body: string) {
   let fence: string | undefined;
   let previous = '';
-  for (const line of body.split(/\r?\n/)) {
+  let comment = false;
+  for (let line of body.split(/\r?\n/)) {
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
     if (fence) {
       if (marker && marker[0] === fence[0] && marker.length >= fence.length
         && /^ {0,3}(?:`+|~+)[ \t]*$/.test(line)) fence = undefined;
       continue;
     }
-    if (marker) { fence = marker; previous = ''; continue; }
+    if (!comment && marker) { fence = marker; previous = ''; continue; }
+    // Comment markers inside fenced code are literal; elsewhere omit comment text.
+    let visible = '';
+    while (line) {
+      const delimiter = comment ? '-->' : '<!--';
+      const at = line.indexOf(delimiter);
+      if (at < 0) { if (!comment) visible += line; break; }
+      if (!comment) visible += line.slice(0, at);
+      line = line.slice(at + delimiter.length);
+      comment = !comment;
+    }
+    line = visible;
     const heading = /^ {0,3}#{1,6}[ \t]+([^\r\n]+)$/.exec(line)?.[1];
     if (heading) {
       const title = heading.replace(/[ \t]+#+[ \t]*$/, '').trim();
@@ -27,6 +39,7 @@ function firstHeading(body: string) {
 // The document retains tokens/comments; public JSON represents unsafe integers lexically.
 export function frontmatter(content: string, path: string) {
   const diagnostics: Diagnostic[] = [];
+  const invalidTypes = new Set<string>();
   const text = content.replace(/^\uFEFF/, '');
   let body = text;
   let metadata: { [key: string]: Value } = Object.create(null) as { [key: string]: Value };
@@ -83,6 +96,18 @@ export function frontmatter(content: string, path: string) {
       };
       if (!isMap(doc.contents)) throw new Error('Frontmatter must be a mapping.');
       metadata = convert(doc.contents, 0) as { [key: string]: Value };
+      // Validate original YAML scalar types independently of JSON conversion.
+      // Conversion above has already rejected cyclic/excessive alias expansion.
+      const resolved = (node: unknown): unknown => isAlias(node) ? resolved(node.resolve(doc)) : node;
+      const stringNode = (node: unknown) => {
+        const value = resolved(node);
+        return isScalar(value) && typeof value.value === 'string';
+      };
+      for (const key of ['title', 'created', 'updated', 'tags']) {
+        if (!doc.has(key)) continue;
+        const node = resolved(doc.get(key, true));
+        if (key === 'tags' ? !isSeq(node) || !node.items.every(stringNode) : !stringNode(node)) invalidTypes.add(key);
+      }
     } catch (error) {
       diagnostics.push({ code: 'INVALID_FRONTMATTER', message: (error as Error).message, path });
     }
@@ -97,9 +122,9 @@ export function frontmatter(content: string, path: string) {
     const valid = key === 'title' ? typeof value === 'string' && !!value.trim()
       : key === 'tags' ? Array.isArray(value) && value.every((tag) => typeof tag === 'string')
       : key === 'created' || key === 'updated' ? validDate(value) : true;
-    if (!valid) diagnostics.push({ code: 'INVALID_METADATA', message: `Invalid managed field: ${key}.`, path });
+    if (!valid || invalidTypes.has(key)) diagnostics.push({ code: 'INVALID_METADATA', message: `Invalid managed field: ${key}.`, path });
   }
-  const title = typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title
+  const title = !invalidTypes.has('title') && typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title
     : firstHeading(body) ?? path.split('/').at(-1)!.replace(/\.md$/i, '');
   return { metadata, title, diagnostics };
 }
