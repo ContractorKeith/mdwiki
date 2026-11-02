@@ -177,7 +177,7 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-M4 writes are merged in PR #17; M5 watching/recovery is implemented pending review;
+M4 writes are merged in PR #17; M5 watching/recovery is merged in PR #18;
 M6 owns release evidence.
 
 See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.
@@ -254,7 +254,7 @@ last check-to-rename race. No atomic external compare-and-swap claim is made.
 Linux results are local; macOS evidence requires the CI job. Watcher recovery and
 graph-heavy performance workloads are not claimed by M4.
 
-## M5 watch lifecycle (pending review)
+## M5 watch lifecycle
 
 `core/watch.ts` attaches built-in recursive filesystem notifications with exclusions
 before descent on Node's recursive implementation. `watch.ts` owns the shared

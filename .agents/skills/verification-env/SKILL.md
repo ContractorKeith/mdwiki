@@ -26,7 +26,7 @@ Installed tests use prefix/bin/mdwiki with explicit npm prefix/cache/config path
 Verify AND words/phrases, punctuation, all indexed fields, exact repeated tags,
 excerpts, stale cursors, restored-mtime edits, unreadable notes, deleted/corrupt/old
 data caches and concurrent full rebuilds. Run `npm run benchmark` for the disposable
-10,000-note baseline; see docs/BENCHMARK.md. M4 writes are merged in PR #17; M5 watching/recovery is implemented pending review.
+10,000-note baseline; see docs/BENCHMARK.md. M4 writes are merged in PR #17; M5 watching/recovery is merged in PR #18.
 
 ## Isolation
 

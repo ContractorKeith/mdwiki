@@ -44,9 +44,8 @@ roughly twice the observed baseline, allowing ordinary load variation while
 making large regressions visible. Exceeding a budget calls for repeat measurement
 and investigation, not an automatic functional-test failure. Compare macOS and
 other hardware to their own recorded baselines before setting platform budgets.
-No timing assertions belong in the acceptance suite. M5 watching should reduce
-indexed-call reconciliation costs; record that separately without changing this
-fixture to conceal regressions.
+No timing assertions belong in the acceptance suite. M5 retains per-call hashing for correctness. Any later reduction in indexed-call
+reconciliation costs must be measured separately without changing this fixture.
 
 ## M3 integration comparison
 
@@ -88,7 +87,7 @@ mutation-throughput workload is measured, and no macOS benchmark claim is made.
 M4 correctness is checked separately with bounded deterministic write fixtures.
 
 
-## M5 integration comparison (pending review)
+## M5 integration comparison
 
 Reran the unchanged `npm run benchmark` fixture, worker limits and budgets on
 2026-11-02: Omarchy Linux x86_64, kernel 7.2.8-9-omarchy, Ryzen 7 7730U,

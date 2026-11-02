@@ -1,6 +1,6 @@
 # mdwiki — Build Plan
 
-Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 is implemented pending review; M6 remains planned.
+Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 merged in PR #18; M6 remains planned.
 
 ## Goal and source of truth
 
@@ -21,7 +21,7 @@ Build process: https://app.basecamp.com/6307587/buckets/49448999/documents/10464
 | M2 | Incremental SQLite FTS search and rebuild | M1 | CLI/MCP queries, tags, pagination, external edits, cache rebuild | Merged #15 |
 | M3 | Wikilinks and backlinks | M2 | Resolver fixtures, ambiguous/missing targets, graph updates via CLI/MCP | Merged #16 |
 | M4 | Writes, adoption, conflicts, dry-run | M3 | CLI/MCP create/replace/append, YAML preservation, conflicts and preview | Merged #17 |
-| M5 | Watch, concurrency and recovery | M4 | External change propagation, multiple processes, interruption/restart | Implemented, pending review |
+| M5 | Watch, concurrency and recovery | M4 | External change propagation, multiple processes, interruption/restart | Merged #18 |
 | M6 | Packaging, benchmark and release evidence | M5 | Fresh tarball install, documented workflows, 10k benchmark, all v0.1 checks | Planned |
 
 M0 lands alone. The core mutation/index interactions justify a sequential chain;

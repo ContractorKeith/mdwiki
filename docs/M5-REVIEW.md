@@ -76,3 +76,12 @@ npm config/cache/prefix and an owned workspace TMPDIR after shared tmpfs quota
 failures. See [benchmark evidence](BENCHMARK.md) for exact measurements and the
 filesystem comparison limitation. Parent must rerun the gate and verify actual
 Linux/macOS CI before integration; this self-inspection is not a PR approval.
+
+## Parent integration outcome
+
+PR #18 merged as `f683d4e` after ordinary parent full-diff inspection, acceptance
+(66 source +66 installed tests), unchanged benchmark and all final-head Linux/macOS
+CI passed at `0d9a9cd`. Merge tree matched the tested head. Parent benchmark used
+owned `/home` btrfs scratch: cold14955ms/133.8MiB, unchanged10243ms/103.6MiB,
+search+sync16845ms/103.6MiB; all original investigation budgets met. Runtime audit
+was clean; development-chain findings are carried into M6's dependency inventory.
