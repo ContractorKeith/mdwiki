@@ -1,10 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 
-export const schemaVersion = 2;
+export const schemaVersion = 3;
 const definitions = {
   state: 'CREATE TABLE state (vault TEXT NOT NULL, generation TEXT NOT NULL)',
-  notes: 'CREATE TABLE notes (path TEXT PRIMARY KEY, version TEXT NOT NULL, title TEXT NOT NULL, metadata TEXT NOT NULL, diagnostics TEXT NOT NULL)',
+  notes: 'CREATE TABLE notes (path TEXT PRIMARY KEY, version TEXT NOT NULL, title TEXT NOT NULL, metadata TEXT NOT NULL, aliases TEXT NOT NULL, diagnostics TEXT NOT NULL)',
+  links: 'CREATE TABLE links (source TEXT NOT NULL, ordinal INTEGER NOT NULL, occurrence TEXT NOT NULL, resolved TEXT, diagnostic TEXT NOT NULL, PRIMARY KEY(source, ordinal))',
   tags: 'CREATE TABLE tags (path TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY(path, tag))',
   failures: 'CREATE TABLE failures (path TEXT PRIMARY KEY, code TEXT NOT NULL, message TEXT NOT NULL)',
   documents: 'CREATE VIRTUAL TABLE documents USING fts5(title, path, body, metadata)',

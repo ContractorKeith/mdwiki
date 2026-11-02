@@ -105,6 +105,8 @@ export function frontmatter(content: string, path: string) {
         const value = resolved(node);
         return isScalar(value) && typeof value.value === 'string';
       };
+      const aliasNode = resolved(doc.get('aliases', true));
+      if (!stringNode(aliasNode) && !(isSeq(aliasNode) && aliasNode.items.every(stringNode))) invalidTypes.add('aliases');
       for (const key of ['title', 'created', 'updated', 'tags']) {
         if (!doc.has(key)) continue;
         const node = resolved(doc.get(key, true));
@@ -129,7 +131,9 @@ export function frontmatter(content: string, path: string) {
   const title = !invalidTypes.has('title') && typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title
     : firstHeading(body) ?? path.split('/').at(-1)!.replace(/\.md$/i, '');
   const invalid = diagnostics.some((d) => d.code === 'INVALID_FRONTMATTER');
-  return { metadata, title, diagnostics, body: invalid ? content : body,
+  const aliases = invalid || invalidTypes.has('aliases') ? [] : typeof metadata.aliases === 'string' ? [metadata.aliases]
+    : Array.isArray(metadata.aliases) && metadata.aliases.every((value) => typeof value === 'string') ? metadata.aliases as string[] : [];
+  return { metadata, title, diagnostics, aliases, body: invalid ? content : body,
     metadataText: invalid ? '' : scalars.join('\n'),
     tags: !invalid && !invalidTypes.has('tags') && Array.isArray(metadata.tags)
       && metadata.tags.every((tag) => typeof tag === 'string') ? metadata.tags as string[] : [] };

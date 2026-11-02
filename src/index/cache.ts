@@ -5,6 +5,9 @@ import { scan, readRawNote } from '../core/notes.js';
 import { frontmatter } from '../core/frontmatter.js';
 import type { Vault } from '../core/vault.js';
 import { AppError, success, type Diagnostic } from '../output.js';
+import { parseLinks, linkResolver } from '../core/links.js';
+import { backlinksCache, type BacklinksInput } from './backlinks.js';
+import { notePath, exactNote } from '../core/paths.js';
 import { openCache } from './schema.js';
 import { compileQuery, searchCache, type SearchInput } from './search.js';
 
@@ -52,6 +55,7 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
       db.prepare('DELETE FROM documents WHERE path=?').run(path);
       db.prepare('DELETE FROM tags WHERE path=?').run(path);
       db.prepare('DELETE FROM notes WHERE path=?').run(path);
+      db.prepare('DELETE FROM links WHERE source=?').run(path);
     };
     for (const { path } of discovered.notes) {
       seen.add(path);
@@ -67,14 +71,26 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
       if (!full && old.get(path) === raw.content_version) { unchanged++; continue; }
       const parsed = frontmatter(raw.content, path);
       if (old.has(path)) { remove(path); changed++; } else added++;
-      db.prepare('INSERT INTO notes VALUES (?, ?, ?, ?, ?)').run(path, raw.content_version, parsed.title,
-        JSON.stringify(parsed.metadata), JSON.stringify(parsed.diagnostics));
+      db.prepare('INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?)').run(path, raw.content_version, parsed.title,
+        JSON.stringify(parsed.metadata), JSON.stringify(parsed.aliases), JSON.stringify(parsed.diagnostics));
       db.prepare('INSERT INTO documents(title, path, body, metadata) VALUES (?, ?, ?, ?)').run(parsed.title, path, parsed.body, parsed.metadataText);
+      for (const [ordinal, occurrence] of parseLinks(raw.content).entries()) {
+        db.prepare('INSERT INTO links VALUES (?, ?, ?, NULL, ?)').run(path, ordinal, JSON.stringify(occurrence), '{}');
+      }
       for (const tag of new Set(parsed.tags)) db.prepare('INSERT INTO tags VALUES (?, ?)').run(path, tag);
     }
     for (const path of old.keys()) if (!seen.has(path)) { remove(path); removed++; }
     const failures = db.prepare('SELECT * FROM failures ORDER BY path').all();
     if (full || added || changed || removed || JSON.stringify(failures) !== oldFailures) {
+      const resolve = linkResolver(db.prepare('SELECT path, aliases FROM notes ORDER BY path').all().map((row) => ({
+        path: row.path as string, aliases: JSON.parse(row.aliases as string) as string[],
+      })));
+      const update = db.prepare('UPDATE links SET resolved=?, diagnostic=? WHERE source=? AND ordinal=?');
+      for (const row of db.prepare('SELECT source, ordinal, occurrence FROM links ORDER BY source, ordinal').all()) {
+        const occurrence = JSON.parse(row.occurrence as string) as { target: string };
+        const resolution = resolve(row.source as string, occurrence.target);
+        update.run(resolution.resolved, JSON.stringify(resolution), row.source!, row.ordinal!);
+      }
       db.prepare('UPDATE state SET generation=?').run(randomUUID());
     }
     for (const row of db.prepare('SELECT diagnostics FROM notes ORDER BY path').all()) diagnostics.push(...JSON.parse(row.diagnostics as string) as Diagnostic[]);
@@ -83,9 +99,10 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
     return { counts: { added, changed, removed, unchanged }, diagnostics };
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
-export async function indexed(vault: Vault, input: { full?: boolean | undefined; search?: SearchInput } = {}) {
+export async function indexed(vault: Vault, input: { full?: boolean | undefined; search?: SearchInput; backlinks?: BacklinksInput } = {}) {
   // Validate before creating or changing any cache files.
   if (input.search) compileQuery(input.search.query);
+  if (input.backlinks) { notePath(input.backlinks.path); await exactNote(vault.root, input.backlinks.path, vault.indexDir); }
   return exclusive(vault, async () => {
     const staging = `rebuild-${randomUUID()}.sqlite`;
     let db: DatabaseSync | undefined;
@@ -98,6 +115,7 @@ export async function indexed(vault: Vault, input: { full?: boolean | undefined;
         await publishCache(vault, staging);
         db = openCache(await cacheFile(vault, 'index.sqlite'), vault.root);
       }
+      if (input.backlinks) return success(backlinksCache(db, vault.root, input.backlinks), diagnostics);
       return input.search ? success(searchCache(db, vault.root, input.search), diagnostics)
         : success({ vault: vault.root, index_dir: vault.indexDir,
           generation: db.prepare('SELECT generation FROM state').get()!.generation as string, ...counts }, diagnostics);
