@@ -3,7 +3,7 @@
 Local-first knowledge base over ordinary Markdown files. mdwiki is intended to
 complement an existing editor; files remain the source of truth.
 
-M1 vault initialization, browsing and reading are implemented pending review.
+M1 vault initialization, browsing and reading are merged in PR #11.
 Not published. Indexing, search, backlinks, writes and watching remain planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
 
 Requires Node.js **26.13.0** (LTS; supported line: >=26.13.0 <27) and npm.

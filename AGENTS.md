@@ -6,7 +6,7 @@ watching. Existing vault files are authoritative; the index is disposable. This
 separate project deliberately practices agent implementation, review, and testing.
 
 ## Status
-M0 runtime and harness merged in PR #8 — 2026-11-02. M1 vault read path is implemented pending review.
+M0 runtime/harness (#8) and M1 vault read path (#11) merged — 2026-11-02.
 M2–M6 remain planned; no release published.
 
 ## Commands
