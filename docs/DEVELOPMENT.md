@@ -1,6 +1,6 @@
 # Development
 
-M0 is merged in PR #8, not published. Node 26.13.0 and npm
+M0 is merged in PR #8; M1 is implemented pending review, not published. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 
@@ -40,6 +40,7 @@ package-lock.json. No global CLI, native addon, ORM or framework is needed.
 | Node.js | 26.13.0 | MIT with bundled third-party notices | Current LTS, built-in test runner and SQLite avoid extra runtime/build dependencies |
 | @modelcontextprotocol/server | 2.4.0 | Apache-2.0 | Official stable v2 SDK owns protocol framing, negotiation, schema validation and stdio lifecycle |
 | zod | 4.6.7 | MIT | Pins the SDK's compatible Zod 4 validator (SDK requires ^4.2.0), rather than a separate validation mechanism |
+| yaml | 2.9.1 | ISC | YAML 1.2 document parser retains comments/source tokens and supports bounded safe metadata validation without rewriting notes |
 | typescript | 6.0.3 | Apache-2.0 | Strict static checking and portable compiled JavaScript |
 | @types/node | 26.6.6 | MIT | Node 26 API declarations, including node:sqlite |
 | eslint | 10.14.0 | MIT | Static checks for source and the runnable test/gate scripts |
@@ -72,25 +73,57 @@ runtime. No unsupported major override or forced peer bypass is applied.
 
 ## Current seams and limits
 
-src/cli.ts validates only help/version/mcp arguments. Shared envelope constructors
-live in src/output.ts; version metadata comes from the packaged package.json.
-No later command is advertised as implemented. Global --json works before/after
-help/version; MCP rejects it before starting.
+src/core owns initialization/discovery, cache binding, exact path policy, bounded
+file reads and YAML parsing. src/operations.ts owns shared input schemas and
+application calls. CLI and MCP only select a vault and translate arguments/results.
+The active cache is bound by vault.json; the discovery marker persists its default
+location. Both contain schema_version 1 and canonical vault/index_dir paths.
+Changing an initialized marker's vault binding or reusing a bound cache conflicts.
+Metadata symlinks are refused; the selected root is canonicalized, including normal
+macOS temporary-directory ancestors. macOS system /var and /tmp ancestors of cache
+paths are canonicalized, without accepting symlinked cache entries.
 
-src/mcp.ts delegates stdio to the SDK. Tests perform real initialize and initialized
-notification exchange using the supported 2025-11-25 protocol, list tools, ping,
-unknown tools/methods, bad arguments, malformed input, concurrent requests, EOF
-and both termination signals. All stdout lines must parse as protocol JSON;
-diagnostics use stderr. SDK v2 handles protocol negotiation (including newer
-clients); the explicit initialize harness proves the supported legacy exchange.
-Tools/results for vault operations are introduced by later milestones.
+List cursors bind canonical vault, filesystem generation, page size and offset.
+The M1 generation hashes sorted physical paths, sizes, nanosecond mtime/ctime and
+folder paths; it is a filesystem observation, not an indexed snapshot. Traversal
+failures fail the operation instead of publishing a partial success. Ordering uses
+exact JavaScript string comparison, without case folding or Unicode normalization.
+Tree depth is 1–50, entries 1–200; depth 1 is root entries. List is 1–200 (default 50).
+Read paths are at most 4096 characters, cursors 2048. Reads are at most 10 MiB,
+including BOM, and decoding rejects invalid UTF-8. File handles use O_NOFOLLOW and
+check identity/path state around reads. Concurrent external changes can require a
+retry; these filesystem observations do not provide a transaction with editors.
+
+Frontmatter is a YAML 1.2 core mapping, bounded to depth 50, 100 expanded alias
+references and 100,000 visited values. Unsupported tags/types, duplicate/non-string
+keys, cycles and nonfinite numbers yield INVALID_FRONTMATTER diagnostics; invalid
+managed fields yield INVALID_METADATA. Failed parsing exposes empty metadata and
+retains the raw content. Missing frontmatter needs no diagnostic. JSON metadata
+uses strings for integers outside the safe Number range, preserving scalar source
+spelling; date-like scalars remain strings. yaml document/source tokens preserve
+comments and lexical types for later writes; M1 performs no adoption or mutation.
+
+Stable application errors: VALIDATION_ERROR, UNSAFE_PATH, INVALID_UTF8 and
+SIZE_LIMIT exit 2; NOT_FOUND exits 3; CONFLICT exits 4; CONFIG_ERROR and
+OPERATIONAL_ERROR exit 5. Successful diagnostic-bearing reads and truncated trees
+exit 6. Error envelopes never include internal stack traces or raw filesystem errors.
+
+src/mcp.ts delegates stdio to the SDK. The precise published tool schemas are also
+validated at the shared application seam, allowing valid tools/call envelopes with
+invalid M1 arguments to return structured VALIDATION_ERROR results consistently.
+Tests exercise initialize/initialized, exact tool names/schemas, real calls,
+invalid argument and cursor types, unknown tools/methods, concurrent requests, EOF
+and SIGINT/SIGTERM. Every stdout line must be protocol JSON; diagnostics use stderr.
+Malformed protocol envelopes remain SDK-owned: scalar params may be diagnosed
+without a response, and malformed protocol tools/list cursors may receive -32603.
+Bounded callers must not wait indefinitely for a malformed-envelope reply. This is
+distinct from validated mdwiki_list cursor arguments; no protocol fork is used.
 
 src/index/schema.ts is private, not a CLI command or public raw-SQL interface.
 It creates only capability_fts and PRAGMA user_version=1 on an explicitly supplied
 disposable file, retains rows on reopen, and refuses incompatible versions without
 rewriting them. This is a capability/schema seam, not the final vault cache schema
-or a cache recovery implementation. No note discovery or filesystem product rules
-have been implemented.
+or a cache recovery implementation. Vault operations do not yet use this private capability cache.
 
 The seam also refuses an ordinary table masquerading as `capability_fts`, preserving
 its original schema version and rows. This check does not replace M2's full cache
@@ -101,5 +134,5 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-Later milestones add vault operations (M1), index/search (M2), links (M3), writes
+Later milestones add index/search (M2), links (M3), writes
 (M4), watching/recovery (M5) and release/benchmark evidence (M6).

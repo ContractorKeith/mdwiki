@@ -53,9 +53,10 @@ try {
   const installed = join(prefix, 'lib', 'node_modules', 'mdwiki');
   console.log(run(process.execPath, ['--test', 'tests/*.test.mjs'], {
     env: { ...env, MDWIKI_TEST_BIN: join(prefix, 'bin', 'mdwiki'),
+      MDWIKI_TEST_CORE: join(installed, 'dist'),
       MDWIKI_TEST_SCHEMA: join(installed, 'dist', 'index', 'schema.js') },
   }));
-  console.log('Installed mdwiki: help/version, validation, MCP and SQLite checks passed.');
+  console.log('Installed mdwiki: help/version, vault init/list/tree/read, validation, MCP and SQLite checks passed.');
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

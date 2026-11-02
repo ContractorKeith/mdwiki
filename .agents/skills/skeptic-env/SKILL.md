@@ -16,11 +16,13 @@ build, tests, npm pack, isolated prefix install, and installed CLI/MCP/SQLite te
 Individual commands and dependency rationale are in docs/DEVELOPMENT.md.
 
 M0 is merged in PR #8. Currently verify help/version in
-text and JSON, validation errors, clean real MCP initialize/list-tools (empty),
+text and JSON, validation errors, clean real MCP initialize/list-tools (exactly
+mdwiki_list, mdwiki_tree, mdwiki_read),
 unknown tools/invalid arguments, EOF/SIGINT/SIGTERM shutdown, and the private SQLite
 FTS5/version seam. Installed tests use prefix/bin/mdwiki, with explicit npm prefix,
-cache and config paths. Vault attacks below become applicable in later milestones;
-do not claim those features passed based on M0 or skip existing runnable tests.
+cache and config paths. M1 init/list/tree/read and path/YAML/pagination attacks are now applicable; writes,
+index and search remain later milestones.
+Do not claim those features passed based on M0 or skip existing runnable tests.
 
 ## Isolation
 
