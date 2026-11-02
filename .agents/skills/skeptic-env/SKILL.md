@@ -10,11 +10,17 @@ T3-managed worktree at the target SHA, never the author's checkout.
 
 ## Build and test
 
-Node.js LTS and npm are required. M0 must pin the supported Node line and fill
-the actual package commands here. Before M0, `bash scripts/accept.sh` checks
-only planning artifacts and is not evidence of application correctness.
-After M0, install with `npm ci`, run `bash scripts/accept.sh`, and exercise the
-npm-packed/installed command, not only a development entry point.
+Node >=26.13.0 <27 is required; .nvmrc pins 26.13.0 LTS. Development uses
+npm 11.20.0. Run `npm ci`, then `bash scripts/accept.sh`: typecheck, lint,
+build, tests, npm pack, isolated prefix install, and installed CLI/MCP/SQLite tests.
+Individual commands and dependency rationale are in docs/DEVELOPMENT.md.
+
+M0 is implemented pending review, not merged. Currently verify help/version in
+text and JSON, validation errors, clean real MCP initialize/list-tools (empty),
+unknown tools/invalid arguments, EOF/SIGINT/SIGTERM shutdown, and the private SQLite
+FTS5/version seam. Installed tests use prefix/bin/mdwiki, with explicit npm prefix,
+cache and config paths. Vault attacks below become applicable in later milestones;
+do not claim those features passed based on M0 or skip existing runnable tests.
 
 ## Isolation
 
