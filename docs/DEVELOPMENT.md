@@ -1,6 +1,6 @@
 # Development
 
-M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15, not published. Node 26.13.0 and npm
+M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15; M3 is implemented pending review, not published. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 
@@ -41,6 +41,7 @@ package-lock.json. No global CLI, native addon, ORM or framework is needed.
 | @modelcontextprotocol/server | 2.4.0 | Apache-2.0 | Official stable v2 SDK owns protocol framing, negotiation, schema validation and stdio lifecycle |
 | zod | 4.6.7 | MIT | Pins the SDK's compatible Zod 4 validator (SDK requires ^4.2.0), rather than a separate validation mechanism |
 | yaml | 2.9.1 | ISC | YAML 1.2 document parser retains comments/source tokens and supports bounded safe metadata validation without rewriting notes |
+| mdast-util-from-markdown | 2.1.0 | MIT | CommonMark syntax positions distinguish inline, fenced, indented and nested code plus HTML comments from wikilinks; original source spelling and offsets remain authoritative |
 | typescript | 6.0.3 | Apache-2.0 | Strict static checking and portable compiled JavaScript |
 | @types/node | 26.6.6 | MIT | Node 26 API declarations, including node:sqlite |
 | eslint | 10.14.0 | MIT | Static checks for source and the runnable test/gate scripts |
@@ -123,11 +124,10 @@ without a response, and malformed protocol tools/list cursors may receive -32603
 Bounded callers must not wait indefinitely for a malformed-envelope reply. This is
 distinct from validated mdwiki_list cursor arguments; no protocol fork is used.
 
-src/index owns SQL and schema version 2. `index.sqlite` stores the canonical vault,
+src/index owns SQL and schema version 3. `index.sqlite` stores the canonical vault,
 content generation, note hashes/metadata/diagnostics, exact tags, unreadable-file
-diagnostics and FTS5 documents. The former M0 capability schema requires a full
-rebuild. Schema definitions, SQLite quick_check and FTS integrity are checked on
-open. Every search reconciles first; unchanged bytes are read/hashed but neither
+diagnostics and FTS5 documents. Earlier M0/M2 schemas require an explicit full rebuild. Schema definitions, SQLite quick_check and FTS integrity are checked on
+open. Every search and backlinks call reconciles first; unchanged bytes are read/hashed but neither
 parsed nor replaced in FTS. A batch updates notes, tags, FTS, diagnostics and its
 new opaque generation in one transaction. A failed directory traversal never
 publishes a partial successful scan. File read failures exclude old content and
@@ -177,7 +177,37 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-Later milestones add links (M3), writes (M4), watching/recovery (M5) and
+Later milestones add writes (M4), watching/recovery (M5) and
 release evidence plus benchmark comparison (M6).
 
 See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.
+
+## M3 graph and review evidence
+
+Core `links.ts` uses mdast-util-from-markdown solely to mask code syntax and HTML
+comments, then extracts wikilinks from original text. This dependency handles
+CommonMark container nesting and variable backtick spans reliably; a second custom
+Markdown block parser would duplicate complex grammar. Its runtime tree is pinned
+in the lockfile; no renderer or unified plugin framework is added. A cheap no-`[[`
+check avoids Markdown parsing when there can be no wikilinks. Frontmatter ranges
+are excluded even when YAML is malformed; unterminated frontmatter excludes the
+remaining document. Original YAML scalar types validate aliases before JSON's
+lexical representation of large integers can produce false string aliases.
+
+Schema v3 stores validated aliases and ordered occurrence JSON, resolved note paths
+and bounded resolution diagnostics. Changed source bytes replace their occurrences;
+any committed batch change rebuilds path/name/alias lookup maps and re-resolves
+stored occurrences, including unchanged sources, in the same SQL transaction as
+FTS/notes/generation. Unchanged scans do not parse or update graph rows. Target
+read failures remove it from resolution; source read failures remove its occurrences.
+The M2 coordinator, staged full rebuild and failure rollback guarantees remain.
+A v2 cache yields an actionable `reindex --full` error; no in-place schema migration
+or note rewriting occurs. See README for exact resolution and page contracts.
+
+M3 remains pending parent standards/spec review and macOS/Linux CI. Local evidence
+uses ordinary inspection and deterministic disposable tests, including real installed
+CLI/initialized MCP parity, cursor bindings, YAML/code lookalikes, duplicates,
+Unicode/case, target/alias edits and rename/removal, rollback and old-schema recovery.
+No watcher or write tools are introduced. The existing benchmark fixture is unchanged
+and has no wikilinks, so its comparison measures graph integration overhead rather
+than graph-heavy parsing/resolution throughput.

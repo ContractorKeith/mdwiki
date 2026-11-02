@@ -56,7 +56,7 @@ try {
       MDWIKI_TEST_CORE: join(installed, 'dist'),
       MDWIKI_TEST_SCHEMA: join(installed, 'dist', 'index', 'schema.js') },
   }));
-  console.log('Installed mdwiki: help/version, vault init/list/tree/read/search/reindex, recovery, validation, MCP and SQLite checks passed.');
+  console.log('Installed mdwiki: help/version, vault init/list/tree/read/search/backlinks/reindex, recovery, validation, MCP and SQLite checks passed.');
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

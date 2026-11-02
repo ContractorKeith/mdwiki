@@ -5,7 +5,7 @@ complement an existing editor; files remain the source of truth.
 
 M1 vault initialization, browsing and reading are merged in PR #11.
 M2 incremental indexing and search are merged in PR #15. Not published.
-Backlinks, writes and watching remain planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
+M3 backlinks are implemented pending review; writes and watching remain planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
 
 Requires Node.js **26.13.0** (LTS; supported line: >=26.13.0 <27) and npm.
 Development uses npm 11.20.0.
@@ -41,6 +41,8 @@ printf '# Unicode\n' > "$scratch/vault/nested/é.md"
 "$scratch/prefix/bin/mdwiki" read 'hello world.MD' --vault "$scratch/vault" --json
 "$scratch/prefix/bin/mdwiki" reindex --vault "$scratch/vault" --json
 "$scratch/prefix/bin/mdwiki" search Hello --vault "$scratch/vault" --json
+printf '[[hello world|Hello]]\n' > "$scratch/vault/source.md"
+"$scratch/prefix/bin/mdwiki" backlinks 'hello world.MD' --vault "$scratch/vault" --json
 "$scratch/prefix/bin/mdwiki" reindex --full --vault "$scratch/vault" --json
 rm -rf "$scratch"
 unset npm_config_cache npm_config_userconfig npm_config_globalconfig
@@ -79,9 +81,39 @@ limited to 4096 characters and 128 clauses; at most 50 tags of 256 characters.
 Search defaults to 50 results, maximum 200; reuse `next_cursor` with the same query,
 filters and limit. A content change, failure change or full rebuild invalidates it.
 
+`backlinks PATH` requires an exact visible note path including extension. Wikilinks
+support labels, heading/block fragments, note embeds and same-note fragments.
+Headings/blocks are not validated. Code spans, fenced/indented code, HTML comments,
+frontmatter and attachment embeds (explicit non-Markdown extensions) are excluded.
+Standard Markdown links are not indexed.
+
+Resolution uses exact source-folder-relative path, then vault-root path, then
+unique filename/stem, then unique frontmatter alias. The `.md` suffix is optional;
+matching preserves case and Unicode spelling, including extension case when supplied.
+An omitted extension considers all physical Markdown extension spellings, diagnosing
+ambiguity. Aliases accept a YAML string or entirely string sequence; invalid alias
+types are ignored. Unsafe targets are diagnosed before resolution. This is a defined
+exact matcher, without full Obsidian compatibility.
+
+Backlinks `data.entries` contains one `{path, occurrence}` per resolved occurrence.
+`occurrence` includes target, fragment, embed, zero-based UTF-16 offset, one-based
+line/column and at most 320 UTF-16 characters of original context. `data.link_diagnostics`
+contains vault-wide unresolved occurrences with `MISSING_LINK`, `AMBIGUOUS_LINK` or
+`INVALID_LINK`, candidate paths (first 200) and total `candidate_count`. Target text
+is bounded to 4097 characters (overlength targets are invalid); fragments to 4096.
+These are graph facts rather than operation failures and do not themselves set
+`degraded`; unreadable/metadata diagnostics still do. Human output prints resolved
+source paths and unresolved summaries to stderr; JSON/MCP carry full structure.
+
+One page spans **both** arrays: at most `limit` total occurrences, default 50,
+maximum 200, ordered by exact source path then occurrence order. A page may contain
+only diagnostics. Continue `next_cursor` until null for the complete result; reuse
+the same target/vault/limit. Any committed index change or full rebuild invalidates
+cursors. Target or alias changes re-resolve unchanged sources without reparsing them.
+
 `reindex` reconciles additions, edits and removals. Every indexed call rereads and
 hashes eligible bytes; unchanged content skips parsing and FTS replacement. Until
-M5 adds watching, search reconciles each call and MCP also reconciles at startup.
+M5 adds watching, search and backlinks reconcile each call and MCP also reconciles at startup.
 Invalid YAML uses raw-text search with diagnostics. Unreadable notes are excluded
 from current hits with diagnostics; traversal failures fail the operation.
 
@@ -95,9 +127,9 @@ in [development notes](docs/DEVELOPMENT.md). Notes are never modified by indexin
 
 MCP clients launch the installed binary with `--vault DIR mcp`. Initialize the
 vault through CLI first. The tools are exactly `mdwiki_list`, `mdwiki_tree`,
-`mdwiki_read`, `mdwiki_search` and `mdwiki_reindex`. Arguments mirror command
+`mdwiki_read`, `mdwiki_search`, `mdwiki_backlinks` and `mdwiki_reindex`. Arguments mirror command
 options: read takes `path`; search takes `query`, optional `tags` (array), `limit`
-and `cursor`; reindex takes optional boolean `full`.
+and `cursor`; backlinks takes exact `path`, optional `limit` and `cursor`; reindex takes optional boolean `full`.
 They share CLI JSON envelopes in `structuredContent`, plus readable JSON text.
 Keep stdin open until replies arrive; close stdin or send SIGINT/SIGTERM to stop.
 Protocol stdout has no startup logs. `mcp --json` is a usage error.

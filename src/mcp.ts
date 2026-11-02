@@ -10,7 +10,7 @@ export async function serve(vault: Vault): Promise<void> {
   for (const diagnostic of initial.diagnostics) process.stderr.write(`${diagnostic.code}: ${diagnostic.path ?? ''} ${diagnostic.message}\n`);
   const handle = serveStdio(() => {
     const server = new McpServer({ name: 'mdwiki', version }, { capabilities: { tools: {} } });
-    for (const operation of ['list', 'tree', 'read', 'search', 'reindex'] as const) {
+    for (const operation of ['list', 'tree', 'read', 'search', 'backlinks', 'reindex'] as const) {
       const schema = schemas[operation];
       // Advertise the precise schema; validate in the shared operation so valid
       // tool envelopes with bad arguments get our stable application envelope.

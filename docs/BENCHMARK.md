@@ -47,3 +47,23 @@ other hardware to their own recorded baselines before setting platform budgets.
 No timing assertions belong in the acceptance suite. M5 watching should reduce
 indexed-call reconciliation costs; record that separately without changing this
 fixture to conceal regressions.
+
+## M3 integration comparison (pending review)
+
+Reran the unchanged command/fixture on 2026-11-02 on the same Omarchy host,
+Node/npm and `/tmp` tmpfs described above. Notes remain 10,476,780 bytes; total
+fixture/cache size is 31,333,844 logical bytes. No script or budget changes.
+
+| Operation | M3 elapsed | M3 peak RSS | Observable result |
+|---|---:|---:|---|
+| Cold index | 11,708 ms | 135.3 MiB | 10,000 added |
+| Unchanged reconciliation | 9,655 ms | 101.0 MiB | 10,000 unchanged, 0 added |
+| Search including reconciliation | 9,809 ms | 113.3 MiB | 50 hits |
+
+All remain within the existing investigation budgets. Relative to the single M2
+run, unchanged sync took 600 ms longer and the largest RSS increase was 15.8 MiB
+for search; cold/search elapsed times were lower. These single runs do not establish
+statistical performance equivalence. This fixture contains no wikilinks: the M3
+parser skips Markdown AST construction when `[[` is absent, so this measures
+integration/startup/schema overhead, not graph-heavy parsing or resolution cost.
+Bounded graph fixtures exercise correctness separately. No macOS benchmark claim.

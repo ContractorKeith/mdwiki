@@ -7,7 +7,7 @@ import { operate, schemas } from './operations.js';
 const help = {
   name: 'mdwiki', version,
   usage: 'mdwiki [--vault DIR] [--index-dir DIR] [--json] COMMAND',
-  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'reindex', 'mcp'],
+  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'search', 'backlinks', 'reindex', 'mcp'],
   options: ['--help, -h', '--version, -v', '--json', '--vault DIR', '--index-dir DIR'],
 };
 const helpText = `mdwiki ${version}
@@ -21,8 +21,9 @@ Commands:
   tree [--depth N] [--limit N]    Browse paths (depth 3, max 200 entries)
   read PATH                      Read a whole note (max 10 MiB)
   search QUERY [--tag TAG]        Search words/phrases (also --limit/--cursor)
+  backlinks PATH                 Follow links (also --limit/--cursor)
   reindex [--full]                Reconcile or rebuild the disposable cache
-  mcp                            Start stdio MCP with read and search tools
+  mcp                            Start stdio MCP with browsing, search and backlinks
 
 Options (before or after commands):
   --help, -h
@@ -63,12 +64,12 @@ function parse(args: string[]) {
   const original = positional[0] ?? 'help';
   if (!help.commands.includes(original)) throw new AppError('VALIDATION_ERROR', `Unknown command: ${original}`);
   if (original === 'mcp' && args.includes('--json')) throw new AppError('VALIDATION_ERROR', 'mcp uses the stdio protocol; --json is not allowed.');
-  if (positional.length > (['read', 'search'].includes(original) ? 2 : 1) || (['read', 'search'].includes(original) && positional.length !== 2)) throw new AppError('VALIDATION_ERROR', 'Unexpected or missing positional argument.');
+  if (positional.length > (['read', 'search', 'backlinks'].includes(original) ? 2 : 1) || (['read', 'search', 'backlinks'].includes(original) && positional.length !== 2)) throw new AppError('VALIDATION_ERROR', 'Unexpected or missing positional argument.');
   if (!positional.length && !requested && Object.keys(options).length) throw new AppError('VALIDATION_ERROR', 'A command is required with vault options.');
   if (tags.length && original !== 'search') throw new AppError('VALIDATION_ERROR', '--tag requires search.');
   for (const flag of Object.keys(options)) {
-    if (flag === '--limit' && ['list', 'tree', 'search'].includes(original)) continue;
-    if (flag === '--cursor' && ['list', 'search'].includes(original)) continue;
+    if (flag === '--limit' && ['list', 'tree', 'search', 'backlinks'].includes(original)) continue;
+    if (flag === '--cursor' && ['list', 'search', 'backlinks'].includes(original)) continue;
     if (flag === '--full' && original === 'reindex') continue;
     if (flag === '--depth' && original === 'tree') continue;
     if (['--vault', '--index-dir'].includes(flag)) continue;
@@ -81,8 +82,8 @@ function parse(args: string[]) {
   }
   if (original === 'search') { input.query = positional[1]; if (tags.length) input.tags = tags; }
   if (original === 'reindex' && options['--full']) input.full = true;
-  if (original === 'read') input.path = positional[1];
-  if (original === 'list' || original === 'tree' || original === 'read' || original === 'search' || original === 'reindex') {
+  if (original === 'read' || original === 'backlinks') input.path = positional[1];
+  if (original === 'list' || original === 'tree' || original === 'read' || original === 'search' || original === 'reindex' || original === 'backlinks') {
     const parsed = schemas[original].safeParse(input);
     if (!parsed.success) throw new AppError('VALIDATION_ERROR', 'Invalid command arguments.');
   }
@@ -111,6 +112,7 @@ try {
     else if ('content' in result.data) process.stdout.write(result.data.content as string);
     else if ('entries' in result.data) {
       for (const entry of result.data.entries) process.stdout.write(entry.path + '\n');
+      if ('link_diagnostics' in result.data && Array.isArray(result.data.link_diagnostics)) for (const diagnostic of result.data.link_diagnostics) process.stderr.write(`${diagnostic.code}: ${diagnostic.path} -> ${diagnostic.occurrence.target}\n`);
       if ('next_cursor' in result.data && result.data.next_cursor) process.stderr.write(`Next cursor: ${result.data.next_cursor}\n`);
       if ('truncated' in result.data && result.data.truncated) process.stderr.write('Tree truncated; adjust --depth/--limit.\n');
     } else if (command === 'reindex') process.stdout.write(JSON.stringify(result.data) + '\n');
