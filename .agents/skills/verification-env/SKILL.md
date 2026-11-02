@@ -26,7 +26,7 @@ Installed tests use prefix/bin/mdwiki with explicit npm prefix/cache/config path
 Verify AND words/phrases, punctuation, all indexed fields, exact repeated tags,
 excerpts, stale cursors, restored-mtime edits, unreadable notes, deleted/corrupt/old
 data caches and concurrent full rebuilds. Run `npm run benchmark` for the disposable
-10,000-note baseline; see docs/BENCHMARK.md. M4 writes are implemented pending review; watching remains M5.
+10,000-note baseline; see docs/BENCHMARK.md. M4 writes are merged in PR #17; watching remains M5.
 
 ## Isolation
 
@@ -81,7 +81,7 @@ installed CLI/MCP structured parity/errors. Link diagnostics do not themselves m
 an otherwise complete operation degraded. Benchmark fixture/budgets remain unchanged;
 it contains no links, so report that graph-heavy throughput is not measured.
 
-## M4 writes (pending review)
+## M4 writes
 
 Run installed CLI file/stdin and initialized MCP create/replace/append scenarios.
 Assert exclusive create (including dangling symlinks), stale/deleted replacement

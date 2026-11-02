@@ -188,8 +188,11 @@ miss same-size edits or restored mtimes. Avoid reparsing/reindexing unchanged co
 Graph resolution may change when any path/alias is added/removed/renamed, even when
 the source text is unchanged. Readers must not see a half-applied batch.
 
-CLI index-backed reads reconcile first. MCP reconciles at startup, watches, and must
-not knowingly serve a dirty index: await queued reconciliation before indexed reads.
+CLI index-backed reads reconcile first. MCP defers cache creation/reconciliation
+and watcher activation until its first indexed operation or real write; initialization
+and preview-only sessions remain free of cache/config/lock mutations. Once activated,
+MCP watches and must not knowingly serve a dirty index: await queued reconciliation
+before indexed reads. Explicit `watch` activates immediately.
 MCP and `watch` monitor create/change/delete/rename events with debounce, startup
 race handling, periodic reconciliation for missed events, and recovery diagnostics.
 No OS service installation. Graceful SIGINT/SIGTERM/stdio closure releases resources.

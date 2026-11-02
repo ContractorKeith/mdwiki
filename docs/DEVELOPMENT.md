@@ -177,7 +177,7 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-M4 writes are implemented pending review; later milestones add watching/recovery (M5) and
+M4 writes are merged in PR #17; later milestones add watching/recovery (M5) and
 release evidence plus benchmark comparison (M6).
 
 See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.
@@ -212,7 +212,7 @@ M3 introduced no watcher or write tools. The existing benchmark fixture is uncha
 and has no wikilinks, so its comparison measures graph integration overhead rather
 than graph-heavy parsing/resolution throughput.
 
-## M4 mutation behavior (pending review)
+## M4 mutation behavior
 
 Core `mutations.ts` owns validated create/replace/latest append, path observations,
 same-directory publication and the injectable clock. `adoption.ts` merges YAML
