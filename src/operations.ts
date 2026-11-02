@@ -18,7 +18,7 @@ export const schemas = {
   read: z.strictObject({ path: z.string().min(1).max(4096) }),
 };
 export type Operation = keyof typeof schemas;
-export async function operate(vault: Vault, operation: Operation, input: unknown) {
+export async function operate(vault: Vault, operation: Operation, input: unknown, runIndex: typeof indexed = indexed) {
   const parsed = schemas[operation].safeParse(input);
   if (!parsed.success) throw new AppError('VALIDATION_ERROR', 'Invalid operation arguments: ' + parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
   switch (operation) {
@@ -28,7 +28,7 @@ export async function operate(vault: Vault, operation: Operation, input: unknown
       if (result.dry_run) return success(result);
       const warnings = result.publication_warning ? [{ code: 'PUBLICATION_CLEANUP_FAILED', message: result.publication_warning, path: result.path }] : [];
       try {
-        const index = await indexed(vault);
+        const index = await runIndex(vault);
         return success({ ...result, index: { ok: true, data: index.data } }, [...warnings, ...index.diagnostics]);
       } catch (error) {
         const failure = errorResult(error).error;
@@ -36,15 +36,15 @@ export async function operate(vault: Vault, operation: Operation, input: unknown
           [...warnings, { code: 'INDEX_UPDATE_FAILED', message: `File write succeeded; do not retry append. ${failure.message}`, path: result.path }]);
       }
     }
-    case 'backlinks': return indexed(vault, { backlinks: schemas.backlinks.parse(input) });
-    case 'reindex': return indexed(vault, schemas.reindex.parse(input));
-    case 'search': return indexed(vault, { search: schemas.search.parse(input) });
+    case 'backlinks': return runIndex(vault, { backlinks: schemas.backlinks.parse(input) });
+    case 'reindex': return runIndex(vault, schemas.reindex.parse(input));
+    case 'search': return runIndex(vault, { search: schemas.search.parse(input) });
     case 'list': return listNotes(vault, schemas.list.parse(input));
     case 'tree': return treeNotes(vault, schemas.tree.parse(input));
     case 'read': return readNote(vault, schemas.read.parse(input).path);
   }
 }
-export async function toolResult(vault: Vault, operation: Operation, input: unknown) {
-  try { return await operate(vault, operation, input); }
+export async function toolResult(vault: Vault, operation: Operation, input: unknown, runIndex: typeof indexed = indexed) {
+  try { return await operate(vault, operation, input, runIndex); }
   catch (error) { return errorResult(error); }
 }

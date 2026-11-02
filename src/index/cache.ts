@@ -13,6 +13,14 @@ import { coordinate } from '../core/coordinator.js';
 import { bindCache } from '../core/vault.js';
 import { compileQuery, searchCache, type SearchInput } from './search.js';
 
+export class DataCacheError extends AppError {}
+
+export interface SyncReport {
+  vault: string; generation: string; added: number; changed: number; removed: number; unchanged: number;
+  updated: boolean; diagnostics: Diagnostic[];
+}
+export type IndexInput = { full?: boolean | undefined; search?: SearchInput; backlinks?: BacklinksInput };
+
 async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
   // Complete discovery before starting a batch. Traversal failures must never
   // publish an empty/partial successful rebuild.
@@ -55,7 +63,8 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
     }
     for (const path of old.keys()) if (!seen.has(path)) { remove(path); removed++; }
     const failures = db.prepare('SELECT * FROM failures ORDER BY path').all();
-    if (full || added || changed || removed || JSON.stringify(failures) !== oldFailures) {
+    const updated = Boolean(full || added || changed || removed || JSON.stringify(failures) !== oldFailures);
+    if (updated) {
       const resolve = linkResolver(db.prepare('SELECT path, aliases FROM notes ORDER BY path').all().map((row) => ({
         path: row.path as string, aliases: JSON.parse(row.aliases as string) as string[],
       })));
@@ -70,10 +79,10 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
     for (const row of db.prepare('SELECT diagnostics FROM notes ORDER BY path').all()) diagnostics.push(...JSON.parse(row.diagnostics as string) as Diagnostic[]);
     for (const row of failures) diagnostics.push({ path: row.path as string, code: row.code as string, message: row.message as string });
     db.exec('COMMIT');
-    return { counts: { added, changed, removed, unchanged }, diagnostics };
+    return { counts: { added, changed, removed, unchanged }, diagnostics, updated };
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
-export async function indexed(vault: Vault, input: { full?: boolean | undefined; search?: SearchInput; backlinks?: BacklinksInput } = {}) {
+export async function indexed(vault: Vault, input: IndexInput = {}, committed?: (report: SyncReport) => void) {
   // Validate before creating or changing any cache files.
   if (input.search) compileQuery(input.search.query);
   if (input.backlinks) { notePath(input.backlinks.path); await exactNote(vault.root, input.backlinks.path, vault.indexDir); }
@@ -82,18 +91,22 @@ export async function indexed(vault: Vault, input: { full?: boolean | undefined;
     const staging = `rebuild-${randomUUID()}.sqlite`;
     let db: DatabaseSync | undefined;
     try {
-      db = openCache(await cacheFile(vault, input.full ? staging : 'index.sqlite'), vault.root);
-      const { counts, diagnostics } = await reconcile(vault, db, input.full ?? false);
+      const filename = await cacheFile(vault, input.full ? staging : 'index.sqlite');
+      try { db = openCache(filename, vault.root); }
+      catch { throw new DataCacheError('OPERATIONAL_ERROR', `Cannot open data cache ${filename}; run mdwiki --vault '${vault.root.replaceAll("'", "'\\''")}' --index-dir '${vault.indexDir.replaceAll("'", "'\\''")}' reindex --full.`, 5); }
+      const { counts, diagnostics, updated } = await reconcile(vault, db, input.full ?? false);
       if (input.full) {
         db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
         db.close(); db = undefined;
         await publishCache(vault, staging);
         db = openCache(await cacheFile(vault, 'index.sqlite'), vault.root);
       }
+      const generation = db.prepare('SELECT generation FROM state').get()!.generation as string;
+      committed?.({ vault: vault.root, generation, ...counts, updated, diagnostics });
       if (input.backlinks) return success(backlinksCache(db, vault.root, input.backlinks), diagnostics);
       return input.search ? success(searchCache(db, vault.root, input.search), diagnostics)
         : success({ vault: vault.root, index_dir: vault.indexDir,
-          generation: db.prepare('SELECT generation FROM state').get()!.generation as string, ...counts }, diagnostics);
+          generation, ...counts }, diagnostics);
     } finally {
       db?.close();
       if (input.full) await discardCache(vault, staging);

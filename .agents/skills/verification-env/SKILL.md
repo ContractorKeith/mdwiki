@@ -26,7 +26,7 @@ Installed tests use prefix/bin/mdwiki with explicit npm prefix/cache/config path
 Verify AND words/phrases, punctuation, all indexed fields, exact repeated tags,
 excerpts, stale cursors, restored-mtime edits, unreadable notes, deleted/corrupt/old
 data caches and concurrent full rebuilds. Run `npm run benchmark` for the disposable
-10,000-note baseline; see docs/BENCHMARK.md. M4 writes are merged in PR #17; watching remains M5.
+10,000-note baseline; see docs/BENCHMARK.md. M4 writes are merged in PR #17; M5 watching/recovery is implemented pending review.
 
 ## Isolation
 
@@ -34,6 +34,9 @@ Create disposable scratch vaults and an isolated npm installation prefix. Pass
 explicit `--vault` and `--index-dir` paths. Never access ~/vault, ~/Documents,
 or other real notes. Do not repurpose HOME or CODEX_HOME. Clean only scratch
 files you created. Keep fixtures under 100 MiB; /tmp may be shared memory storage.
+If shared /tmp is quota-limited, set TMPDIR to an owned mkdtemp directory on the
+workspace filesystem and remove it after children stop. Record the filesystem
+change alongside benchmark timings; do not change fixtures or budgets.
 Use controlled fixture transitions for filesystem regressions, with no fixed
 sleeps as correctness evidence. Checks do not promise atomic exclusion against
 arbitrary concurrent external editors.
@@ -101,3 +104,17 @@ mutation lock cannot be stolen and SIGKILL releases ownership without removing t
 inode; no sleeps, probabilistic loops or real vault access. Crash temps may require
 manual cleanup after writers stop. Mutation lock ends before index lock begins.
 Record the remaining uncoordinated-editor check-to-publication race.
+
+## M5 watch and recovery
+
+Verify JSONL ready/sync/diagnostic/stopped/error envelopes and text mode, external
+create/edit/delete/rename/alias updates, quiet unchanged scans and active MCP cache
+commits without another tool request. Keep stdin open through event handshakes.
+Use controlled attachment/dirty-during-scan/missed-event failures, bounded retry
+exhaustion and late-attachment shutdown. Preserve M4 preview snapshots and write
+success after activation failure. Test active EOF/signals/stdout closure, deleted,
+corrupt and incompatible data recovery, inaccessible-note exclusion and recovery.
+Pause a real staged rebuild before publish; prove live exclusion, kill/restart,
+complete old/new data, stable coordinator inode and concurrent reader/rebuild.
+Run the unchanged benchmark; no graph-heavy/mutation-throughput claim. Watch
+notification reliability on network/virtual filesystems remains platform-limited.

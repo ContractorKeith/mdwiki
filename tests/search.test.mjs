@@ -156,9 +156,13 @@ test('installed CLI and initialized MCP reconcile external edits, page, validate
   assert.deepEqual(paths(first), ['a.md']);
   assert.deepEqual(paths(await cli(['search', '"searchable phrase"', '--tag', 'One', '--tag', 'Two', '--limit', '1', '--cursor', first.data.next_cursor])), ['b.md']);
   for (const args of [['search', '"bad'], ['search', '!!!'], ['search', 'x', '--limit', '201'], ['reindex', '--tag', 'One'], ['read', 'a.md', '--full']]) await cli(args, 2);
-  const peer = protocol(t, vault);
-  assert.equal((await peer.request(1, 'initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'search-test', version: '1' } })).error, undefined);
-  peer.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  let peer;
+  async function connect() {
+    peer = protocol(t, vault);
+    assert.equal((await peer.request(1, 'initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'search-test', version: '1' } })).error, undefined);
+    peer.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  }
+  await connect();
   let id = 2;
   const call = async (name, args) => (await peer.request(id++, 'tools/call', { name: 'mdwiki_' + name, arguments: args })).result;
   assert.deepEqual((await call('search', { query: 'searchable', tags: ['One', 'Two'] })).structuredContent, await cli(['search', 'searchable', '--tag', 'One', '--tag', 'Two']));
@@ -169,13 +173,19 @@ test('installed CLI and initialized MCP reconcile external edits, page, validate
   }
   assert.equal((await call('reindex', { full: 'yes' })).isError, true);
   assert.equal((await call('reindex', { full: true })).structuredContent.ok, true);
+  // Stop autonomous reconciliation before deliberately corrupting live data.
+  peer.child.stdin.end(); assert.equal((await peer.closed).code, 0); peer.assertClean();
   await writeFile(dbPath, 'corrupt cache');
   const broken = await cli(['search', 'updatedtext'], 5);
   assert.ok(broken.error.message.includes(dbPath)); assert.match(broken.error.message, /reindex --full/);
+  await connect();
   assert.equal((await call('search', { query: 'updatedtext' })).isError, true);
+  peer.child.stdin.end(); assert.equal((await peer.closed).code, 0); peer.assertClean();
   await writeFile(dbPath + '-wal', 'stale WAL'); await writeFile(dbPath + '-shm', 'stale SHM');
   await cli(['reindex', '--full']);
+  await connect();
   assert.deepEqual(paths((await call('search', { query: 'updatedtext' })).structuredContent), ['a.md']);
+  peer.child.stdin.end(); assert.equal((await peer.closed).code, 0); peer.assertClean();
   let db = new DatabaseSync(dbPath); db.exec('PRAGMA user_version=999'); db.close();
   await cli(['reindex'], 5);
   // Two real cooperating processes serialize full publication, including WAL cleanup.
@@ -187,5 +197,4 @@ test('installed CLI and initialized MCP reconcile external edits, page, validate
   await rm(dbPath); await symlink(target, dbPath);
   assert.equal((await cli(['reindex', '--full'], 2)).error.code, 'UNSAFE_PATH');
   assert.equal(await readFile(target, 'utf8'), 'safe');
-  peer.child.stdin.end(); assert.equal((await peer.closed).code, 0); peer.assertClean();
 });
