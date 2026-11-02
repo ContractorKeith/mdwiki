@@ -1,6 +1,6 @@
 # mdwiki — Build Plan
 
-Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 merged in PR #18; M6 remains planned.
+Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 merged in PR #18; M6 packaging/release evidence merged in PR #19. No release tag or registry publication.
 
 ## Goal and source of truth
 
@@ -22,7 +22,7 @@ Build process: https://app.basecamp.com/6307587/buckets/49448999/documents/10464
 | M3 | Wikilinks and backlinks | M2 | Resolver fixtures, ambiguous/missing targets, graph updates via CLI/MCP | Merged #16 |
 | M4 | Writes, adoption, conflicts, dry-run | M3 | CLI/MCP create/replace/append, YAML preservation, conflicts and preview | Merged #17 |
 | M5 | Watch, concurrency and recovery | M4 | External change propagation, multiple processes, interruption/restart | Merged #18 |
-| M6 | Packaging, benchmark and release evidence | M5 | Fresh tarball install, documented workflows, 10k benchmark, all v0.1 checks | Planned |
+| M6 | Packaging, benchmark and release evidence | M5 | Fresh tarball install, documented workflows, 10k benchmark, all v0.1 checks | Merged #19 |
 
 M0 lands alone. The core mutation/index interactions justify a sequential chain;
 do not manufacture parallel branches with shared ownership. Independent reviews
@@ -65,3 +65,16 @@ acceptance gate and bounded deterministic fixtures for documented workflows.
 Record actual platform results, fix confirmed defects and rerun relevant checks.
 A package tarball and release evidence can be completed without claiming npm
 publication.
+
+## M6 integration outcome
+
+PR #19 merged as `a8cff09`; tested head `ca278bc` and merge trees match. Parent
+ordinary full-diff review, 70 source +70 installed tests and final-head Linux/macOS
+CI passed. Parent serial benchmark stayed within original budgets. The independently
+reproduced tarball matches worker SHA-256
+`08295b4bac30f6b7d287ed2a5c3f3823e1fdecf3dcf51255c122d33c8cc49823`.
+Artifact and manifest: `/home/contractorkeith/.cache/mdwiki-m6-parent/artifacts/`.
+All milestone issues are complete. Before registry publication, resolve package
+name claimability and authenticated publisher access; E404/isolated ENEEDAUTH do not
+establish either. No tag/publication occurred. Development audit findings and
+performance/filesystem limits remain documented in DEVELOPMENT and RELEASE.

@@ -77,3 +77,15 @@ isolated ENEEDAUTH is not publisher access or a survey of existing credentials.
 No publication, tag, ready/merge, watch, delegates, central worklog or Basecamp action.
 No graph-heavy/watch-scale/mutation-throughput performance claim. External editor
 atomic compare-and-swap is not promised; filesystem notification limits remain.
+
+## Parent integration outcome
+
+Merged PR #19 as `a8cff09` after parent full-diff inspection, npm ci, acceptance
+(70 source +70 installed; zero failures/skips), whitespace checks and all final-head
+Linux/macOS CI passed at `ca278bc`. Merge tree equals tested head. Independently
+produced parent tarball is byte-identical to the checksum above;34-file manifest
+and all39 actual runtime dependency versions/licenses verified against the lock.
+Parent artifact retained at `/home/contractorkeith/.cache/mdwiki-m6-parent/artifacts/`.
+Parent serial benchmark on owned btrfs scratch: cold14206ms/133.5MiB,
+unchanged9998ms/104.4MiB, search+sync9735ms/104.4MiB; all budgets passed.
+Scratch cleaned. M6 integration is complete; no release tag or npm publication.
