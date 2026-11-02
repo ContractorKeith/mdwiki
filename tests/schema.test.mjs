@@ -45,3 +45,20 @@ test('incompatible cache is refused without changing its version or data', async
     assert.equal(db.prepare('SELECT value FROM sentinel').get().value, 42);
   } finally { db.close(); }
 });
+
+for (const existingVersion of [0, schemaVersion]) {
+  test(`ordinary table cannot masquerade as FTS5 at version ${existingVersion}`, async (t) => {
+    const path = await scratch(t);
+    let db = new DatabaseSync(path);
+    db.exec(`PRAGMA user_version = ${existingVersion};
+      CREATE TABLE capability_fts(text);
+      INSERT INTO capability_fts VALUES ('sentinel')`);
+    db.close();
+    assert.throws(() => openCache(path), /INCOMPATIBLE_SCHEMA/);
+    db = new DatabaseSync(path);
+    try {
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, existingVersion);
+      assert.equal(db.prepare('SELECT text FROM capability_fts').get().text, 'sentinel');
+    } finally { db.close(); }
+  });
+}

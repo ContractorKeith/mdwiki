@@ -15,6 +15,11 @@ Run `npm ci`, then `bash scripts/accept.sh`. The latter runs, in order:
 5. `npm run test:installed`: npm pack, isolated global-prefix install, then the
    same scenarios through the executable in prefix/bin and the installed schema module.
 
+Ordinary `npm pack` runs the prepack build hook, so a clean source checkout cannot
+silently produce a tarball without the executable. The gate's pack runner uses
+`--ignore-scripts` only after its explicit build; a separate regression test packs
+an unbuilt source copy with lifecycle scripts enabled.
+
 The installed test uses explicit temporary npm prefix, cache, user config and
 global config paths, ignores lifecycle scripts, and removes only its own temporary
 directory in a finally block. Registry access is required for dependency install;
@@ -86,6 +91,10 @@ disposable file, retains rows on reopen, and refuses incompatible versions witho
 rewriting them. This is a capability/schema seam, not the final vault cache schema
 or a cache recovery implementation. No note discovery or filesystem product rules
 have been implemented.
+
+The seam also refuses an ordinary table masquerading as `capability_fts`, preserving
+its original schema version and rows. This check does not replace M2's full cache
+schema validation and recovery work.
 
 Tests use temporary directories with tiny fixtures, outside real vaults. Each child
 has an 8-second timeout and cleanup hook; the pack/install runner has bounded
