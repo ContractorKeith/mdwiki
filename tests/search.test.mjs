@@ -198,3 +198,35 @@ test('installed CLI and initialized MCP reconcile external edits, page, validate
   assert.equal((await cli(['reindex', '--full'], 2)).error.code, 'UNSAFE_PATH');
   assert.equal(await readFile(target, 'utf8'), 'safe');
 });
+
+test('real CLI/MCP search defaults, maximum pages and exact rank ties remain bounded beyond 200 hits', async t => {
+  const { cwd, vault, put } = await fixture(t);
+  for (let i = 0; i < 205; i++) await put(`${String(i).padStart(3, '0')}.md`, '# Same\ncommon');
+  const json = async args => {
+    const reply = await run(t, ['--vault', vault, 'search', 'common', ...args, '--json'], cwd);
+    assert.equal(reply.code, 0, reply.stdout + reply.stderr);
+    return JSON.parse(reply.stdout);
+  };
+  assert.equal((await json([])).data.entries.length, 50);
+  const page = await json(['--limit', '200']);
+  assert.equal(page.data.entries.length, 200);
+  assert.deepEqual(paths(page), Array.from({ length: 200 }, (_, i) => `${String(i).padStart(3, '0')}.md`));
+  const peer = protocol(t, vault);
+  assert.equal((await peer.request(1, 'initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'm6-pages', version: '1' } })).error, undefined);
+  peer.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  let id = 2;
+  const call = async args => (await peer.request(id++, 'tools/call', { name: 'mdwiki_search', arguments: args })).result;
+  const remaining = (await call({ query: 'common', limit: 200, cursor: page.data.next_cursor })).structuredContent;
+  assert.deepEqual(paths(remaining), ['200.md', '201.md', '202.md', '203.md', '204.md']);
+  assert.equal(remaining.data.next_cursor, null);
+  assert.equal((await call({ query: 'common' })).structuredContent.data.entries.length, 50);
+  for (const args of [{ query: 'common', limit: 201 }, { query: 'x'.repeat(4097) },
+    { query: 'common', tags: Array(51).fill('tag') }, { query: 'common', tags: ['x'.repeat(257)] }]) {
+    const invalid = await call(args);
+    assert.equal(invalid.isError, true);
+    assert.equal(invalid.structuredContent.error.code, 'VALIDATION_ERROR');
+  }
+  peer.child.stdin.end();
+  assert.equal((await peer.closed).code, 0);
+  peer.assertClean();
+});

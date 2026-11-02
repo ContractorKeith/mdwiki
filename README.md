@@ -3,50 +3,28 @@
 Local-first knowledge base over ordinary Markdown files. mdwiki is intended to
 complement an existing editor; files remain the source of truth.
 
-M1 vault initialization, browsing and reading are merged in PR #11.
-M2 incremental indexing and search are merged in PR #15. Not published.
-M3 backlinks are merged in PR #16; M4 writes are merged in PR #17. M5 watching/recovery is merged in PR #18; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
+Provides browsing, search, backlinks, metadata-preserving writes and watching through
+one `mdwiki` executable and eight stdio MCP tools. No accounts or runtime network
+service. v0.1 is being verified; no registry publication or release tag is claimed.
 
-Requires Node.js **26.13.0** (LTS; supported line: >=26.13.0 <27) and npm.
-Development uses npm 11.20.0.
-
-```sh
-npm ci
-bash scripts/accept.sh
-node dist/cli.js --help
-node dist/cli.js --version --json
-```
-
-The acceptance gate packs the compiled package, installs it in a disposable npm
-prefix, and runs the installed executable. To inspect a local installation yourself:
+Requires Node.js **26.13.0** (supported line: >=26.13.0 <27) and npm.
+Development uses npm 11.20.0. Install a locally produced artifact:
 
 ```sh
-scratch="$(mktemp -d)"
-touch "$scratch/user.npmrc" "$scratch/global.npmrc"
-export npm_config_cache="$scratch/npm-cache"
-export npm_config_userconfig="$scratch/user.npmrc"
-export npm_config_globalconfig="$scratch/global.npmrc"
-npm pack --pack-destination "$scratch"
-npm install --global --prefix "$scratch/prefix" --ignore-scripts "$scratch/mdwiki-0.1.0.tgz"
-"$scratch/prefix/bin/mdwiki" --help
-"$scratch/prefix/bin/mdwiki" --version
-"$scratch/prefix/bin/mdwiki" help --json
-"$scratch/prefix/bin/mdwiki" --json version
-mkdir -p "$scratch/vault/nested"
-printf '# Hello\n' > "$scratch/vault/hello world.MD"
-printf '# Unicode\n' > "$scratch/vault/nested/é.md"
-"$scratch/prefix/bin/mdwiki" init --vault "$scratch/vault" --index-dir "$scratch/cache"
-"$scratch/prefix/bin/mdwiki" --vault "$scratch/vault" list --json
-"$scratch/prefix/bin/mdwiki" tree --vault "$scratch/vault" --depth 3 --limit 200 --json
-"$scratch/prefix/bin/mdwiki" read 'hello world.MD' --vault "$scratch/vault" --json
-"$scratch/prefix/bin/mdwiki" reindex --vault "$scratch/vault" --json
-"$scratch/prefix/bin/mdwiki" search Hello --vault "$scratch/vault" --json
-printf '[[hello world|Hello]]\n' > "$scratch/vault/source.md"
-"$scratch/prefix/bin/mdwiki" backlinks 'hello world.MD' --vault "$scratch/vault" --json
-"$scratch/prefix/bin/mdwiki" reindex --full --vault "$scratch/vault" --json
-rm -rf "$scratch"
-unset npm_config_cache npm_config_userconfig npm_config_globalconfig
+npm install --global /absolute/path/to/mdwiki-0.1.0.tgz
+mdwiki --help
+mdwiki --version --json
 ```
+
+See [the disposable CLI workflow](docs/USAGE.md) for isolated installation without
+a global prefix, every command family, and runnable examples shipped in the tarball.
+[Agent instructions](docs/AGENTS.md) include initialized MCP requests, schemas and
+safe write handling. [Acceptance mapping](docs/ACCEPTANCE.md),
+[release checklist](docs/RELEASE.md) and [dependency inventory](docs/DEPENDENCIES.json)
+record reproducible verification and remaining release constraints.
+
+From a checkout, run `npm ci`, then `bash scripts/accept.sh`. The gate tests source
+and a fresh installed tarball using synthetic vaults. See [development](docs/DEVELOPMENT.md).
 
 Initialize an existing directory with `init --vault DIR`; notes are never rewritten.
 Repeat init to reuse its persisted cache choice. For ordinary commands, `--vault`
@@ -116,13 +94,10 @@ from `read` to replace an existing note. A missing replacement target conflicts 
 is never recreated. `append PATH --file FILE_OR_DASH` reads the latest existing
 note under the vault's mutation lock; it adds a newline boundary when needed.
 `--file -` reads stdin. Both commands accept `--dry-run`, `--json`, `--vault` and
-`--index-dir`, without prompts. For example, in a disposable initialized vault:
+`--index-dir`, without prompts.
 
-```sh
-printf '# New note\n' | mdwiki --vault "$scratch/vault" write 'new.md' --file - --dry-run --json
-printf '# New note\n' | mdwiki --vault "$scratch/vault" write 'new.md' --file - --json
-printf 'More text\n' | mdwiki --vault "$scratch/vault" append 'new.md' --file - --json
-```
+The complete runnable create, preview, read-version, replace, stale-conflict and
+append sequence is in [the disposable workflow](docs/USAGE.md).
 
 Writes adopt `title`, UTC `created`/`updated` and `tags: []` when missing, retaining
 valid existing title/created/tags unless replacement YAML explicitly supplies them.

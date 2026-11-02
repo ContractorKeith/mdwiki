@@ -9,7 +9,7 @@ test('npm pack builds an executable from a clean unbuilt source tree', async (t)
   const root = resolve(import.meta.dirname, '..');
   const scratch = await mkdtemp(join(tmpdir(), 'mdwiki-clean-pack-'));
   t.after(() => rm(scratch, { recursive: true, force: true }));
-  for (const name of ['src', 'package.json', 'tsconfig.json', 'tsconfig.build.json', 'README.md', 'LICENSE']) {
+  for (const name of ['src', 'package.json', 'tsconfig.json', 'tsconfig.build.json', 'README.md', 'LICENSE', 'docs', 'examples']) {
     await cp(join(root, name), join(scratch, name), { recursive: true });
   }
   // Reuse installed compiler dependencies; the source copy deliberately has no dist.
