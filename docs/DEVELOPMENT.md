@@ -1,6 +1,6 @@
 # Development
 
-M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15; M3 is implemented pending review, not published. Node 26.13.0 and npm
+M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15; M3 is merged in PR #16, not published. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 
@@ -204,7 +204,7 @@ The M2 coordinator, staged full rebuild and failure rollback guarantees remain.
 A v2 cache yields an actionable `reindex --full` error; no in-place schema migration
 or note rewriting occurs. See README for exact resolution and page contracts.
 
-M3 remains pending parent standards/spec review and macOS/Linux CI. Local evidence
+M3 merged in PR #16 after parent standards/spec review and macOS/Linux CI passed. Evidence
 uses ordinary inspection and deterministic disposable tests, including real installed
 CLI/initialized MCP parity, cursor bindings, YAML/code lookalikes, duplicates,
 Unicode/case, target/alias edits and rename/removal, rollback and old-schema recovery.

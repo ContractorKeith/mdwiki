@@ -48,7 +48,7 @@ No timing assertions belong in the acceptance suite. M5 watching should reduce
 indexed-call reconciliation costs; record that separately without changing this
 fixture to conceal regressions.
 
-## M3 integration comparison (pending review)
+## M3 integration comparison
 
 Reran the unchanged command/fixture on 2026-11-02 on the same Omarchy host,
 Node/npm and `/tmp` tmpfs described above. Notes remain 10,476,780 bytes; total

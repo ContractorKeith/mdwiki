@@ -18,7 +18,7 @@ npm 11.20.0. Run `npm ci`, then `bash scripts/accept.sh`: typecheck, lint,
 build, tests, npm pack, isolated prefix install, and installed CLI/MCP/SQLite tests.
 Individual commands and dependency rationale are in docs/DEVELOPMENT.md.
 
-M0 and M1 are merged; M2 index/search is merged in PR #15; M3 backlinks is implemented pending review. Verify help/version,
+M0 and M1 are merged; M2 index/search is merged in PR #15; M3 backlinks is merged in PR #16. Verify help/version,
 text/JSON envelopes, validation errors, real MCP initialize/list-tools (exactly
 mdwiki_list, mdwiki_tree, mdwiki_read, mdwiki_search, mdwiki_backlinks, mdwiki_reindex), invalid arguments, unknown tools,
 EOF/SIGINT/SIGTERM shutdown, and vault-bound SQLite FTS5/schema recovery.
