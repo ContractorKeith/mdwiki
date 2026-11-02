@@ -1,6 +1,6 @@
 # Development
 
-M0 (#8) and M1 (#11) are merged. M2 is merged in PR #15; M3 is merged in PR #16, not published. Node 26.13.0 and npm
+M0–M5 are merged. M6 adds package workflows and release evidence; no publication is claimed. Node 26.13.0 and npm
 11.20.0 were used on Linux x86_64. The supported Node line is >=26.13.0 <27,
 enforced by package engines and the acceptance script; .nvmrc pins CI to 26.13.0.
 
@@ -283,3 +283,53 @@ Do not delete live coordinators; externally corrupt coordinators still require a
 processes to stop before the documented manual removal. Staging artifacts from a
 killed rebuild remain for manual cleanup after processes stop. No external cache
 directory is recursively erased. macOS evidence must come from actual CI.
+
+
+## M6 dependency and registry audit (2026-11-02)
+
+[DEPENDENCIES.json](DEPENDENCIES.json) inventories every one of the 135 locked
+package locations (version, development classification, SPDX license). Tests compare
+it exactly to package-lock.json. 39 dependency locations are runtime and 96 are
+development-only; npm's prod count 40 also counts the root package. Runtime licenses:
+36 MIT, 2 Apache-2.0, 1 ISC. Development: 70 MIT, 13 Apache-2.0, 6 BSD-2-Clause,
+5 ISC, 1 BSD-3-Clause, 1 BlueOak-1.0.0. No unknown license field or dependency added.
+These are manifest declarations, not a legal opinion; upstream package notices ship
+with dependency installations. mdwiki's own LICENSE is MIT and included in the tarball.
+
+Fresh `npm ci` and read-only audits under owned empty configs reproduce runtime
+**0 vulnerabilities** and full **11 moderate** findings. The single underlying
+[GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) concerns
+minimatch pattern amplification/CPU and memory exhaustion, affected <11.0.1,
+patched 11.0.1. The advisory describes attacker-controlled patterns at
+optimizationLevel >=2; development tooling remains affected even though the runtime
+installation omits it. The lock pins minimatch 10.2.6; ESLint declares ^10.2.6
+and typescript-estree ^10.2.2, both excluding the patched major 11. Version/path
+details are in the inventory.
+
+`npm explain minimatch` traces ESLint's direct minimatch and @eslint/config-array,
+and typescript-eslint → typescript-estree → minimatch. The other findings are
+propagated metavulnerabilities in eslint-utils, @eslint/js, parser/plugin/type-utils/
+utils and typescript-eslint, not eleven distinct runtime defects. npm proposes
+eslint 4.0.0, @eslint/js 9.39.5 and typescript-eslint 8.14.0 as semver-major fixes.
+Those downgrades do not preserve the current lint/TypeScript 6 toolchain contract.
+No `audit fix --force`, major override or dependency change was made. Revisit with
+compatible upstream releases; lint only trusted checkout/config patterns meanwhile.
+The audit is dated registry evidence, not a permanent security guarantee.
+
+Read-only public registry `npm view mdwiki name version dist-tags --json` returned
+E404, “Unpublished on 2024-12-22T02:45:57.821Z”. This does **not** establish that
+the name can be registered. `npm whoami --registry https://registry.npmjs.org` with
+owned empty user/global configs returned ENEEDAUTH. No existing credential files
+were read and no tokens printed. It establishes no authenticated publisher in that
+isolated configuration, not the absence of credentials elsewhere on the machine.
+Name ownership/publishing access remain release constraints. Tarball prefix install
+works independently; binary remains mdwiki. No registry mutation or tag occurred.
+
+`MDWIKI_ARTIFACT_DIR` retains the gate's tested tarball and artifact.json outside the
+repository only after installed tests pass. See [release checklist](RELEASE.md) for
+checksums, exact contents, platform gates and reproduction. Runtime dependencies
+are resolved from exact direct versions when installing the tarball; npm does not
+use the development lockfile for a global consumer install. The retained manifest
+and locked inventory describe this checkout; artifact.json also records actual
+installed dependency versions/licenses. Future transitive registry resolution can
+differ and should be re-audited before release.

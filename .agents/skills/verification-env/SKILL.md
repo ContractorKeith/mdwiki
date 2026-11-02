@@ -118,3 +118,19 @@ Pause a real staged rebuild before publish; prove live exclusion, kill/restart,
 complete old/new data, stable coordinator inode and concurrent reader/rebuild.
 Run the unchanged benchmark; no graph-heavy/mutation-throughput claim. Watch
 notification reliability on network/virtual filesystems remains platform-limited.
+
+
+## M6 package and release evidence
+
+Run the unchanged acceptance gate with optional MDWIKI_ARTIFACT_DIR pointing to an
+owned directory outside the repo. After installed tests pass it retains the tested
+tarball and artifact.json (SHA-256 and npm file manifest). Check the compiled binary,
+MIT license, shipped operational/spec docs, runnable examples and exclusion allowlist.
+The workflow tests execute shipped CLI and initialized Node-only MCP examples with
+the selected binary. DEPENDENCIES.json is checked against all lockfile package
+versions/licenses, including development-only dependencies. See docs/ACCEPTANCE.md
+for row-by-row observable evidence and docs/RELEASE.md for the platform/release gate.
+Run npm ci, acceptance, then the unchanged benchmark serially under owned workspace
+TMPDIR/npm cache/config/prefix. Retain machine/filesystem and comparison limits.
+Read-only npm naming/auth checks must not read credential files or print tokens;
+404 is not claimability. Do not publish, tag or infer macOS success from Linux.

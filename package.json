@@ -1,7 +1,7 @@
 {
   "name": "mdwiki",
   "version": "0.1.0",
-  "description": "Local-first Markdown vault browsing and search through CLI and MCP",
+  "description": "Local-first Markdown vault search, backlinks and safe writes through CLI and MCP",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -10,7 +10,16 @@
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/USAGE.md",
+    "docs/AGENTS.md",
+    "docs/DEVELOPMENT.md",
+    "docs/DEPENDENCIES.json",
+    "docs/RELEASE.md",
+    "docs/ACCEPTANCE.md",
+    "docs/BENCHMARK.md",
+    "docs/features/v0.1/SPEC.md",
+    "examples/"
   ],
   "engines": {
     "node": ">=26.13.0 <27"
@@ -37,5 +46,21 @@
     "eslint": "10.14.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1"
-  }
+  },
+  "author": "ContractorKeith",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ContractorKeith/mdwiki.git"
+  },
+  "homepage": "https://github.com/ContractorKeith/mdwiki#readme",
+  "bugs": {
+    "url": "https://github.com/ContractorKeith/mdwiki/issues"
+  },
+  "keywords": [
+    "markdown",
+    "knowledge-base",
+    "mcp",
+    "cli",
+    "local-first"
+  ]
 }

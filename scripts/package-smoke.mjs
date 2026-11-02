@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -44,18 +45,52 @@ try {
   assert.ok(files.includes('dist/cli.js'));
   assert.ok(files.includes('dist/mcp.js'));
   assert.ok(files.includes('dist/index/schema.js'));
-  assert.ok(files.every((file) => file.startsWith('dist/')
-    || ['package.json', 'README.md', 'LICENSE'].includes(file)));
+  const metadata = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const allowed = metadata.files;
+  assert.ok(files.every(file => file === 'package.json' || allowed.some(path =>
+    path.endsWith('/') ? file.startsWith(path) : file === path)));
+  assert.ok(files.every(file => !/(^|\/)(?:node_modules|tests|\.env|\.git|\.scratch)(?:\/|$)/.test(file)));
+  assert.ok(files.every(file => !file.endsWith('.tgz')));
+  for (const path of allowed.filter(path => !path.endsWith('/'))) assert.ok(files.includes(path), path);
+  assert.ok(files.includes('examples/cli-workflow.sh'));
+  assert.ok(files.includes('examples/mcp-workflow.mjs'));
   assert.ok(packed.unpackedSize < 1024 * 1024);
   console.log(`Packed ${packed.filename} (${packed.unpackedSize} unpacked bytes)`);
   console.log(run('npm', ['install', '--global', '--prefix', prefix, '--omit=dev',
     '--ignore-scripts', '--no-audit', '--no-fund', join(scratch, packed.filename)]).trim());
   const installed = join(prefix, 'lib', 'node_modules', 'mdwiki');
+  const installedDependencies = run('npm', ['ls', '--global', '--prefix', prefix, '--all', '--parseable'])
+    .trim().split('\n').filter(path => path.startsWith(join(prefix, 'lib', 'node_modules') + '/'))
+    .map(path => {
+      const pkg = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8'));
+      assert.ok(pkg.license, `Missing license: ${pkg.name}`);
+      return { name: pkg.name, version: pkg.version, license: pkg.license };
+    });
+  assert.ok(!installedDependencies.some(pkg => ['eslint', 'typescript', 'typescript-eslint'].includes(pkg.name)));
+  // Exclude user/global npm binary directories during application exercises.
+  const runtimeBin = join(scratch, 'runtime-bin');
+  mkdirSync(runtimeBin);
+  symlinkSync(process.execPath, join(runtimeBin, 'node'));
+  assert.ok(process.env.npm_execpath, 'Run via npm run test:installed');
+  symlinkSync(process.env.npm_execpath, join(runtimeBin, 'npm'));
+
   console.log(run(process.execPath, ['--test', 'tests/*.test.mjs'], {
-    env: { ...env, MDWIKI_TEST_BIN: join(prefix, 'bin', 'mdwiki'),
+    env: { ...env, PATH: `${runtimeBin}:/usr/bin:/bin`, NODE_PATH: '', MDWIKI_TEST_BIN: join(prefix, 'bin', 'mdwiki'),
+      MDWIKI_TEST_PACKAGE: installed,
       MDWIKI_TEST_CORE: join(installed, 'dist'),
       MDWIKI_TEST_SCHEMA: join(installed, 'dist', 'index', 'schema.js') },
   }));
+  if (process.env.MDWIKI_ARTIFACT_DIR) {
+    const destination = resolve(process.env.MDWIKI_ARTIFACT_DIR);
+    mkdirSync(destination, { recursive: true });
+    const tarball = join(destination, packed.filename);
+    copyFileSync(join(scratch, packed.filename), tarball);
+    const evidence = { tarball, sha256: createHash('sha256').update(readFileSync(tarball)).digest('hex'),
+      node: process.version, platform: process.platform, arch: process.arch,
+      packed, installed_dependencies: installedDependencies, installed_suite_passed: true };
+    writeFileSync(join(destination, 'artifact.json'), JSON.stringify(evidence, null, 2) + '\n');
+    console.log(JSON.stringify({ tarball, sha256: evidence.sha256 }));
+  }
   console.log('Installed mdwiki: help/version, vault init/list/tree/read/search/backlinks/reindex, recovery, validation, MCP and SQLite checks passed.');
 } finally {
   rmSync(scratch, { recursive: true, force: true });

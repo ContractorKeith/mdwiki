@@ -120,3 +120,41 @@ M5 preserves per-call read/hash reconciliation for correctness with other proces
 watching does not remove that cost. This fixture activates no long-lived watcher
 and contains no wikilinks or mutations. Graph-heavy throughput, watch scale and
 mutation throughput remain unmeasured. No macOS benchmark claim is made.
+
+## M6 release comparison
+
+Reran the **unchanged** `npm run benchmark` serially after a successful acceptance
+run on 2026-11-02. No acceptance/benchmark subprocesses overlapped this measurement.
+Host `omarchy`: Linux x86_64, kernel 7.2.8-9-omarchy, AMD Ryzen 7 7730U with
+Radeon Graphics, 16 logical CPUs, 13.5 GiB RAM, Node v26.13.0/npm 11.20.0.
+TMPDIR was an owned mkdtemp directory under `/home/contractorkeith/.cache/mdwiki-m6`
+on `/home` btrfs (`/dev/mapper/root[/@home]`), with owned npm cache/config/prefix.
+Shared `/tmp` previously hit errno -122 quota; no real vault was used.
+
+Exactly 10,000 notes/100 folders, 10,476,780 note bytes and 31,334,048 total logical
+fixture/cache bytes (under 100 MiB). Path binding lengths affect total cache bytes.
+Fixture, script, fresh-worker timeouts and 25/20/22-second / 256-MiB budgets remain
+unchanged. Workers asserted 10,000 additions cold, 10,000 unchanged/zero additions
+on the next sync, and 50 phrase-plus-exact-tag search hits.
+
+| Operation | M5 elapsed / RSS | M6 elapsed / RSS | M6 minus M5 |
+|---|---|---|---|
+| Cold index | 12,551 ms / 135.1 MiB | 12,019 ms / 133.7 MiB | -532 ms / -1.4 MiB |
+| Unchanged reconciliation | 9,923 ms / 111.7 MiB | 9,748 ms / 112.3 MiB | -175 ms / +0.6 MiB |
+| Search including reconciliation | 9,894 ms / 111.5 MiB | 9,788 ms / 112.2 MiB | -106 ms / +0.7 MiB |
+
+All investigation budgets pass; no budget overrun required investigation/repetition.
+M5 used the same host and btrfs, making it the closest recorded comparison. Against
+M2's tmpfs baseline, elapsed changes are +297/+693/-862 ms and RSS changes are
++6.6/+14.8/+14.7 MiB; M4 also used tmpfs. Filesystem differences and uncontrolled
+host load prevent attributing those differences to code. These are single runs,
+not statistical equivalence, a speedup claim, a cold OS page-cache measurement or
+latency guarantees. Startup/fixture generation remain excluded from elapsed work;
+peak RSS includes each fresh worker's startup.
+
+The fixture has no wikilinks, mutations or long-lived watcher. Search includes
+mandatory read/hash reconciliation, not FTS-only latency. No graph-heavy,
+watch-scale, mutation-throughput or macOS performance claim is made. Local Linux
+artifact verification does not substitute for actual macOS/Linux CI and parent
+release checks. Raw measurement and artifact manifest/checksum accompany the M6
+PR handoff; scratch fixtures are removed after their workers exit.
