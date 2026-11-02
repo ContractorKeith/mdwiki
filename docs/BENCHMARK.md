@@ -67,3 +67,22 @@ statistical performance equivalence. This fixture contains no wikilinks: the M3
 parser skips Markdown AST construction when `[[` is absent, so this measures
 integration/startup/schema overhead, not graph-heavy parsing or resolution cost.
 Bounded graph fixtures exercise correctness separately. No macOS benchmark claim.
+
+## M4 integration comparison
+
+Reran the unchanged command/fixture on 2026-11-02 on the same Omarchy Linux host,
+Node v26.13.0/npm 11.20.0 and `/tmp` tmpfs. Exactly 10,000 notes in 100 folders:
+10,476,780 note bytes and 31,333,844 total logical fixture/cache bytes. The fixture,
+worker limits and investigation budgets are unchanged.
+
+| Operation | M4 elapsed | M4 peak RSS | Observable result |
+|---|---:|---:|---|
+| Cold index | 11,259 ms | 134.9 MiB | 10,000 added |
+| Unchanged reconciliation | 9,109 ms | 99.9 MiB | 10,000 unchanged, 0 added |
+| Search including reconciliation | 9,674 ms | 99.9 MiB | 50 hits |
+
+All are within existing budgets. Against the recorded M3 run, elapsed times were
+449/546/135 ms lower respectively; RSS was 0.4/1.1/13.4 MiB lower. These single
+runs do not establish statistical equivalence or a speedup. No graph-heavy or
+mutation-throughput workload is measured, and no macOS benchmark claim is made.
+M4 correctness is checked separately with bounded deterministic write fixtures.

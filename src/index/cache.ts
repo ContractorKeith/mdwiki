@@ -9,35 +9,9 @@ import { parseLinks, linkResolver } from '../core/links.js';
 import { backlinksCache, type BacklinksInput } from './backlinks.js';
 import { notePath, exactNote } from '../core/paths.js';
 import { openCache } from './schema.js';
+import { coordinate } from '../core/coordinator.js';
+import { bindCache } from '../core/vault.js';
 import { compileQuery, searchCache, type SearchInput } from './search.js';
-
-// Never unlink this coordinator: its stable inode serializes data DB opens,
-// replacements and WAL cleanup. SQLite releases the transaction after a crash.
-const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
-const queues = new Map<string, Promise<unknown>>();
-async function exclusive<T>(vault: Vault, action: () => Promise<T>): Promise<T> {
-  const previous = queues.get(vault.indexDir) ?? Promise.resolve();
-  const next = previous.catch(() => {}).then(async () => {
-    let lock: DatabaseSync | undefined;
-    try {
-      lock = new DatabaseSync(await cacheFile(vault, 'coordinator.sqlite'));
-      lock.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
-      lock.exec('CREATE TABLE IF NOT EXISTS binding (vault TEXT NOT NULL)');
-      const rows = lock.prepare('SELECT vault FROM binding').all();
-      if (!rows.length) lock.prepare('INSERT INTO binding VALUES (?)').run(vault.root);
-      else if (rows.length !== 1 || rows[0]!.vault !== vault.root) throw new AppError('CONFLICT', 'Cache coordinator belongs to another vault.', 4);
-      const result = await action();
-      lock.exec('COMMIT');
-      return result;
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('OPERATIONAL_ERROR', `Cannot use cache ${vault.indexDir}/index.sqlite; retry, or run mdwiki --vault ${shellQuote(vault.root)} --index-dir ${shellQuote(vault.indexDir)} reindex --full. Coordinator errors require restoring access to ${vault.indexDir}/coordinator.sqlite (do not remove it while processes are running).`, 5);
-    } finally { lock?.close(); }
-  });
-  queues.set(vault.indexDir, next);
-  try { return await next; }
-  finally { if (queues.get(vault.indexDir) === next) queues.delete(vault.indexDir); }
-}
 
 async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
   // Complete discovery before starting a batch. Traversal failures must never
@@ -103,7 +77,8 @@ export async function indexed(vault: Vault, input: { full?: boolean | undefined;
   // Validate before creating or changing any cache files.
   if (input.search) compileQuery(input.search.query);
   if (input.backlinks) { notePath(input.backlinks.path); await exactNote(vault.root, input.backlinks.path, vault.indexDir); }
-  return exclusive(vault, async () => {
+  await bindCache(vault);
+  return coordinate(vault, 'coordinator.sqlite', async () => {
     const staging = `rebuild-${randomUUID()}.sqlite`;
     let db: DatabaseSync | undefined;
     try {

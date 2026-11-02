@@ -1,16 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/server';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { serveStdio, StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
-import { operate, schemas, toolResult } from './operations.js';
+import { schemas, toolResult } from './operations.js';
 import type { Vault } from './core/vault.js';
+import { NOTE_LIMIT } from './core/paths.js';
 import { version } from './metadata.js';
 
 export async function serve(vault: Vault): Promise<void> {
-  const initial = await operate(vault, 'reindex', {});
-  for (const diagnostic of initial.diagnostics) process.stderr.write(`${diagnostic.code}: ${diagnostic.path ?? ''} ${diagnostic.message}\n`);
+  // Defer cache work to indexed calls: a preview-only session is read-only.
   const handle = serveStdio(() => {
     const server = new McpServer({ name: 'mdwiki', version }, { capabilities: { tools: {} } });
-    for (const operation of ['list', 'tree', 'read', 'search', 'backlinks', 'reindex'] as const) {
+    for (const operation of ['list', 'tree', 'read', 'search', 'backlinks', 'write', 'append', 'reindex'] as const) {
       const schema = schemas[operation];
       // Advertise the precise schema; validate in the shared operation so valid
       // tool envelopes with bad arguments get our stable application envelope.
@@ -31,6 +31,8 @@ export async function serve(vault: Vault): Promise<void> {
     }
     return server;
   }, {
+    // JSON may escape each input byte as six characters; retain framing headroom.
+    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 6 * NOTE_LIMIT + 64 * 1024 }),
     onerror: () => { process.stderr.write('MCP_PROTOCOL_ERROR: Invalid stdio message.\n'); },
   });
 

@@ -5,7 +5,7 @@ complement an existing editor; files remain the source of truth.
 
 M1 vault initialization, browsing and reading are merged in PR #11.
 M2 incremental indexing and search are merged in PR #15. Not published.
-M3 backlinks are merged in PR #16; writes and watching remain planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
+M3 backlinks are merged in PR #16; M4 writes are implemented, pending review. Watching remains planned; see the [plan](docs/PLAN.md) and [v0.1 specification](docs/features/v0.1/SPEC.md).
 
 Requires Node.js **26.13.0** (LTS; supported line: >=26.13.0 <27) and npm.
 Development uses npm 11.20.0.
@@ -111,9 +111,65 @@ only diagnostics. Continue `next_cursor` until null for the complete result; reu
 the same target/vault/limit. Any committed index change or full rebuild invalidates
 cursors. Target or alias changes re-resolve unchanged sources without reparsing them.
 
+`write PATH --file FILE_OR_DASH` creates exclusively; supply `--expected-version HASH`
+from `read` to replace an existing note. A missing replacement target conflicts and
+is never recreated. `append PATH --file FILE_OR_DASH` reads the latest existing
+note under the vault's mutation lock; it adds a newline boundary when needed.
+`--file -` reads stdin. Both commands accept `--dry-run`, `--json`, `--vault` and
+`--index-dir`, without prompts. For example, in a disposable initialized vault:
+
+```sh
+printf '# New note\n' | mdwiki --vault "$scratch/vault" write 'new.md' --file - --dry-run --json
+printf '# New note\n' | mdwiki --vault "$scratch/vault" write 'new.md' --file - --json
+printf 'More text\n' | mdwiki --vault "$scratch/vault" append 'new.md' --file - --json
+```
+
+Writes adopt `title`, UTC `created`/`updated` and `tags: []` when missing, retaining
+valid existing title/created/tags unless replacement YAML explicitly supplies them.
+`updated` is always this write's UTC time. Replacement merges supplied top-level
+YAML fields and replaces the body; omitted custom fields survive and custom null
+is a value. Append treats all input as literal body text, including YAML delimiters.
+Malformed/unsupported YAML or invalid managed values refuse writes. Custom values,
+comments and scalar spellings (including large integers) survive; YAML collection
+formatting may be normalized. Existing BOM, newline style and permissions survive.
+Symlinks and multi-link targets are refused. Visible missing create parents are
+validated before creation; note paths require exact physical spelling.
+
+Dry-run returns `diff: {before, after}` containing the entire old/proposed text,
+`current_version` (null for create), `proposed_version` and `file_written: false`.
+This full replacement diff includes adoption; no truncation or external diff tool
+is used. Preview creates no notes/directories/cache/config/locks, even when the
+selected external cache is missing. It reserves nothing; a real write validates
+again. Each input and final note is limited to **10 MiB UTF-8**, including YAML/BOM.
+Metadata adoption can put an otherwise valid input over the resulting-note limit.
+Before/after total at most 20 MiB; JSON escaping can expand each byte sixfold.
+MCP accepts a bounded `6 × 10 MiB + 64 KiB` incoming frame (send large calls one at
+a time); structured plus readable-text preview results can occupy up to 264 MiB
+including envelope headroom in the worst JSON-escaping case. Clients must allow full responses of that size.
+
+Real results include `file_written: true`, `content_version` (also
+`proposed_version`) and separate `index: {ok, data|error}`. If reconciliation fails
+after publication, the envelope stays successful with `degraded: true`, diagnostic
+`INDEX_UPDATE_FAILED` and CLI exit 6. The new version proves publication: **do not
+retry append**; repair/reconcile the cache. A post-publication cleanup/finalization
+failure similarly reports `PUBLICATION_CLEANUP_FAILED` without denying file success.
+
+Cooperating writers serialize via `<vault>/.mdwiki/mutations.sqlite`, independently
+of cache overrides, then release that lock before index coordination. SQLite
+releases locks after process death; no PID/stale-lock stealing is used. Never
+remove/replace a live coordinator or its sidecars. Publication uses a synced,
+same-directory hidden temp followed by atomic rename for replacement or exclusive
+hard-link publication for create. Normal failures clean owned temps. A killed
+process can leave `.mdwiki-write-*.tmp`; after stopping writers, remove only such
+owned artifacts. Parent identity/content/mode/link checks immediately precede
+publication. External editors do not honor this lock: an edit in the final
+check-to-publication window can still be overwritten. This is not atomic
+compare-and-swap with Obsidian or arbitrary filesystem changes.
+
 `reindex` reconciles additions, edits and removals. Every indexed call rereads and
 hashes eligible bytes; unchanged content skips parsing and FTS replacement. Until
-M5 adds watching, search and backlinks reconcile each call and MCP also reconciles at startup.
+M5 adds watching, search and backlinks reconcile each call. MCP defers cache creation/reconciliation
+until an indexed call so a preview-only session has no filesystem side effects.
 Invalid YAML uses raw-text search with diagnostics. Unreadable notes are excluded
 from current hits with diagnostics; traversal failures fail the operation.
 
@@ -127,9 +183,12 @@ in [development notes](docs/DEVELOPMENT.md). Notes are never modified by indexin
 
 MCP clients launch the installed binary with `--vault DIR mcp`. Initialize the
 vault through CLI first. The tools are exactly `mdwiki_list`, `mdwiki_tree`,
-`mdwiki_read`, `mdwiki_search`, `mdwiki_backlinks` and `mdwiki_reindex`. Arguments mirror command
+`mdwiki_read`, `mdwiki_search`, `mdwiki_backlinks`, `mdwiki_write`, `mdwiki_append`
+and `mdwiki_reindex`. Arguments mirror command
 options: read takes `path`; search takes `query`, optional `tags` (array), `limit`
 and `cursor`; backlinks takes exact `path`, optional `limit` and `cursor`; reindex takes optional boolean `full`.
+Write takes `path`, `content`, optional SHA-256 `expected_version` and boolean
+`dry_run`; append takes `path`, literal `content` and optional `dry_run`.
 They share CLI JSON envelopes in `structuredContent`, plus readable JSON text.
 Keep stdin open until replies arrive; close stdin or send SIGINT/SIGTERM to stop.
 Protocol stdout has no startup logs. `mcp --json` is a usage error.

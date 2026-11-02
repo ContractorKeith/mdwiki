@@ -106,7 +106,7 @@ managed fields yield INVALID_METADATA. Failed parsing exposes empty metadata and
 retains the raw content. Missing frontmatter needs no diagnostic. JSON metadata
 uses strings for integers outside the safe Number range, preserving scalar source
 spelling; date-like scalars remain strings. yaml document/source tokens preserve
-comments and lexical types for later writes; M1 performs no adoption or mutation.
+comments and lexical types for later writes; reads perform no adoption or mutation.
 
 Stable application errors: VALIDATION_ERROR, UNSAFE_PATH, INVALID_UTF8 and
 SIZE_LIMIT exit 2; NOT_FOUND exits 3; CONFLICT exits 4; CONFIG_ERROR and
@@ -134,7 +134,7 @@ publishes a partial successful scan. File read failures exclude old content and
 return degraded diagnostics; files disappearing mid-scan are distinct NOT_FOUND
 diagnostics. Normal missing files are removed during the next complete scan.
 
-All cooperating index access (including MCP startup) acquires `BEGIN IMMEDIATE`
+All cooperating index access acquires `BEGIN IMMEDIATE`
 on a separate persistent `coordinator.sqlite`, then opens the data DB. An in-process
 queue prevents synchronous SQLite busy waits deadlocking concurrent MCP calls.
 The five-second busy timeout is bounded: another long scan may require a retry.
@@ -158,7 +158,7 @@ remove only `coordinator.sqlite` and its `-journal`/`-wal`/`-shm` sidecars, then
 `reindex --full`. Never do this while another process can hold its inode. Direct
 SQLite clients or external deletion/replacement of live cache files do not honor
 this protocol. This does not supply a filesystem transaction with arbitrary editors.
-M5 still owns watcher recovery and write concurrency; M2 implements only the
+M5 still owns watcher recovery; M4 adds mutation coordination. M2 implements only the
 coordination required for safe data-cache rebuilding.
 
 Search compiles words/phrases into quoted ANDed FTS clauses; punctuation is text
@@ -177,7 +177,7 @@ has an 8-second timeout and cleanup hook; the pack/install runner has bounded
 120-second child commands and always removes its scratch directory. MCP stdin
 stays open until all expected replies arrive. No fixed sleeps establish correctness.
 
-Later milestones add writes (M4), watching/recovery (M5) and
+M4 writes are implemented pending review; later milestones add watching/recovery (M5) and
 release evidence plus benchmark comparison (M6).
 
 See [M2 benchmark](BENCHMARK.md) for the bounded 10k-note command and baseline.
@@ -208,6 +208,48 @@ M3 merged in PR #16 after parent standards/spec review and macOS/Linux CI passed
 uses ordinary inspection and deterministic disposable tests, including real installed
 CLI/initialized MCP parity, cursor bindings, YAML/code lookalikes, duplicates,
 Unicode/case, target/alias edits and rename/removal, rollback and old-schema recovery.
-No watcher or write tools are introduced. The existing benchmark fixture is unchanged
+M3 introduced no watcher or write tools. The existing benchmark fixture is unchanged
 and has no wikilinks, so its comparison measures graph integration overhead rather
 than graph-heavy parsing/resolution throughput.
+
+## M4 mutation behavior (pending review)
+
+Core `mutations.ts` owns validated create/replace/latest append, path observations,
+same-directory publication and the injectable clock. `adoption.ts` merges YAML
+nodes rather than public JSON metadata. The serializer retains original single-line
+scalar source tokens, including quoted escapes and numeric lexical forms, while
+preserving document comments and safe custom values. Resulting YAML is validated
+again, so conflicting supplied anchors/aliases cannot silently change meaning.
+Body newlines follow the current note (or new input); existing BOM/mode survive.
+No dependency was added. See README for commands, response/diff sizes and errors.
+
+The shared SQLite transaction queue moved to core `coordinator.ts`; SQL for index
+content/schema remains in index. Mutation coordination uses the initialized vault's
+`.mdwiki/mutations.sqlite`, not the optional cache directory. Its stable inode and
+SQLite transaction release avoid stale locks after a killed writer. Lock ordering
+is mutation release, then index lock; no code holds both. An in-process queue avoids
+blocking the event loop behind another async holder; cross-process busy timeout is
+five seconds. Recovery of a corrupted mutation coordinator requires stopping all
+writers first, then removing only that coordinator and its sidecars. Never steal
+or unlink a live lock. A crash can leave an owned hidden note temp; normal errors
+clean them. Arbitrary external directory replacement may prevent safe cleanup;
+mdwiki refuses rather than following a swapped parent to delete an unrelated file.
+
+CLI selection and MCP startup use read-only binding validation. Cache creation and
+reconciliation are deferred to actual indexed operations; each indexed read still
+reconciles first. This intentionally defers the earlier eager MCP startup sync to
+make preview-only sessions side-effect-free, including vanished external caches.
+M5 must preserve that property when adding watcher startup. A real write revalidates
+and publishes before reconciliation. Post-publication indexing or finalization
+errors preserve explicit file success and its version, with degraded diagnostics.
+Never retry a published append just because cache work failed.
+
+Ordinary deterministic regression fixtures cover byte/metadata preservation,
+exclusive and stale/missing-target semantics, different-cache writer processes,
+live lock ownership and killed-holder recovery, full filesystem preview snapshots,
+large MCP framing, Unicode/byte limits, publication failure cleanup and separate
+post-publication index failure over real CLI and initialized MCP. External editors
+remain outside the protocol: path/content checks narrow but cannot eliminate the
+last check-to-rename race. No atomic external compare-and-swap claim is made.
+Linux results are local; macOS evidence requires the CI job. Watcher recovery and
+graph-heavy performance workloads are not claimed by M4.
