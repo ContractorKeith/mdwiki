@@ -85,7 +85,11 @@ paths are canonicalized, without accepting symlinked cache entries.
 
 List cursors bind canonical vault, filesystem generation, page size and offset.
 The M1 generation hashes sorted physical paths, sizes, nanosecond mtime/ctime and
-folder paths; it is a filesystem observation, not an indexed snapshot. Traversal
+folder paths; it is a filesystem observation, not an indexed snapshot. Directory
+chains are checked before/after enumeration and after descent, including physical
+identity checks for previously observed directories. Detected replacements refuse
+the scan rather than returning entries from excluded locations. These checks are
+not atomic exclusion against arbitrary concurrent external editors. Traversal
 failures fail the operation instead of publishing a partial success. Ordering uses
 exact JavaScript string comparison, without case folding or Unicode normalization.
 Tree depth is 1–50, entries 1–200; depth 1 is root entries. List is 1–200 (default 50).

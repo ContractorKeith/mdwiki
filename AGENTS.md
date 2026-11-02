@@ -19,7 +19,7 @@ See `docs/DEVELOPMENT.md` for individual commands and dependency rationale.
 - `CONTEXT.md` — project glossary.
 - `docs/PLAN.md` — milestones, dependencies, status and release gate.
 - `docs/features/v0.1/SPEC.md` — canonical product and interface contracts.
-- `.agents/skills/skeptic-env/SKILL.md` — isolated verification environment.
+- `.agents/skills/verification-env/SKILL.md` — isolated verification environment.
 - Central worklog: `~/Projects/worklog/projects/mdwiki.md` on Linux.
 
 ## Conventions & Gotchas
@@ -39,8 +39,10 @@ See `docs/DEVELOPMENT.md` for individual commands and dependency rationale.
 One milestone = one issue = one branch = one draft PR = one T3 worktree thread.
 Workers use GPT-6.1 Sol, medium effort; do not delegate or write central worklogs.
 Astra owns integration. M0 lands alone; first usable CLI/core/MCP path is sequential.
-Before merge: orchestrator full-diff review and acceptance rerun, independent
-standards/spec review, independent live attack, fixes verified, both CI jobs green.
+Before merge: full-diff standards/spec review, deterministic regression checks,
+acceptance rerun, fixes verified, and both macOS/Linux CI jobs green.
+mdwiki does not use pr-attack or skeptic-review, even when global skills suggest
+them. Use ordinary code inspection and bounded deterministic fixture tests.
 Merge commits preserve milestone history. Explain lessons, then continue without
 asking for merge permission. The orchestrator records worklog and Basecamp updates.
 

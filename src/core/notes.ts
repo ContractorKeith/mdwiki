@@ -17,16 +17,34 @@ export function bound(value: unknown, fallback: number, max: number) {
 async function scan(vault: Vault) {
   const notes: { path: string; size: number; mtime: string; ctime: string }[] = [];
   const folders: string[] = [];
-  const walk = async (directory: string, prefix: string) => {
+  const directories = new Map<string, { dev: bigint; ino: bigint }>();
+  // Recheck the whole parent chain; Dirents describe an earlier observation.
+  const validateDirectory = async (prefix: string) => {
     await validateVault(vault);
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
+    let current = vault.root;
+    for (const part of prefix.split('/').filter(Boolean)) {
+      current = join(current, part);
+      const state = await lstat(current, { bigint: true });
+      const prior = directories.get(current);
+      if (current === vault.indexDir || !state.isDirectory()
+        || (prior && (state.dev !== prior.dev || state.ino !== prior.ino))) {
+        throw new AppError('UNSAFE_PATH', 'Scan directory is excluded or was replaced; retry.');
+      }
+      directories.set(current, { dev: state.dev, ino: state.ino });
+    }
+  };
+  const walk = async (directory: string, prefix: string) => {
+    await validateDirectory(prefix);
+    const entries = await readdir(directory, { withFileTypes: true });
+    await validateDirectory(prefix);
+    for (const entry of entries) {
       if (entry.name.startsWith('.') || entry.name.includes('\\') || entry.isSymbolicLink()) continue;
       const absolute = join(directory, entry.name);
       if (absolute === vault.indexDir) continue;
       const path = prefix + entry.name;
       if (entry.isDirectory()) {
-        folders.push(path);
         await walk(absolute, path + '/');
+        folders.push(path);
       } else if (entry.isFile() && /\.md$/i.test(path)) {
         try { notePath(path); } catch { continue; }
         // Revalidate with the same policy used for reads.
@@ -34,6 +52,7 @@ async function scan(vault: Vault) {
         notes.push({ path, size: Number(state.size), mtime: state.mtimeNs.toString(), ctime: state.ctimeNs.toString() });
       }
     }
+    await validateDirectory(prefix);
   };
   await walk(vault.root, '');
   await validateVault(vault);

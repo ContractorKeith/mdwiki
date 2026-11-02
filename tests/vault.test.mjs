@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, realpath, link } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -88,6 +90,44 @@ test('listing and exact reads share policy including physical case/Unicode spell
   await rejects(() => readNote(selected, 'missing.md'), 'NOT_FOUND');
   await symlink(vault, join(scratch, 'root-alias'));
   assert.equal((await selectVault({ vault: join(scratch, 'root-alias') })).root, vault);
+});
+
+test('list and tree refuse directories replaced after directory entries are captured', async (t) => {
+  // Controlled readdir boundaries reproduce replacement without timing or real data.
+  for (const operation of [listNotes, treeNotes]) {
+    for (const transition of ['before-descent', 'after-read', 'ancestor']) {
+      const { scratch, vault } = await fixture(t);
+      const branch = join(vault, 'branch');
+      const cache = join(vault, 'cache');
+      await mkdir(join(branch, 'child'), { recursive: true });
+      await initVault({ vault, indexDir: cache });
+      const outside = join(scratch, 'outside');
+      await mkdir(join(outside, 'excluded-empty'), { recursive: true });
+      await mkdir(join(cache, 'excluded-empty'));
+      const selected = await selectVault({ vault });
+      const original = fs.readdir;
+      const boundary = transition === 'before-descent' ? vault
+        : transition === 'after-read' ? branch : join(branch, 'child');
+      let replaced = false;
+      const mock = t.mock.method(fs, 'readdir', async (...args) => {
+        const entries = await original(...args);
+        if (!replaced && args[0] === boundary) {
+          replaced = true;
+          await fs.rename(branch, join(scratch, 'saved-branch'));
+          await symlink(transition === 'after-read' ? cache : outside, branch);
+        }
+        return entries;
+      });
+      syncBuiltinESMExports();
+      try {
+        await rejects(() => operation(selected), 'UNSAFE_PATH');
+        assert.equal(replaced, true);
+      } finally {
+        mock.mock.restore();
+        syncBuiltinESMExports();
+      }
+    }
+  }
 });
 
 test('raw reads preserve BOM/CRLF and hash bytes; UTF-8, size and YAML failures are explicit', async (t) => {

@@ -342,10 +342,13 @@ without registry evidence. These do not block implementation or tarball installa
 
 One milestone per issue/branch/draft PR/T3 worktree thread. M0 lands alone. GPT-6.1
 Sol medium workers implement; Astra integrates, reruns acceptance, and triages
-independent standards/spec and attack reports. Full review uses the branch diff,
-not only its final commit. Both CI platforms must pass before merge. Fix surviving
+standards/spec findings and deterministic regression results. Full review uses the
+branch diff, not only its final commit. Both CI platforms must pass before merge. Fix surviving
 bugs with regression evidence and preserve review lessons in the central worklog.
-Use a release skeptic on each platform before tagging. No waiting for routine
-permission between milestones; pause only for a genuinely unresolved product choice
+Before tagging, verify the installed package on macOS and Linux with the acceptance
+gate and bounded deterministic fixtures for documented workflows. mdwiki does not
+use pr-attack or skeptic-review, even when global skills suggest them. Use ordinary
+code inspection and deterministic regression/acceptance checks. No waiting for
+routine permission between milestones; pause only for a genuinely unresolved product choice
 or unavailable required capability. User confirmation of the grill and instruction
 to run spec/tickets/build authorize this sequence without another approval round.
