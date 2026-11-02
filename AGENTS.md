@@ -6,8 +6,8 @@ watching. Existing vault files are authoritative; the index is disposable. This
 separate project deliberately practices agent implementation, review, and testing.
 
 ## Status
-M0 runtime and harness implemented pending review — 2026-11-02. Not merged.
-Vault product behavior remains planned for M1–M6.
+M0 runtime and harness merged in PR #8 — 2026-11-02. M1 vault read path is next.
+Vault product behavior remains planned for M1–M6; no release published.
 
 ## Commands
 Node >=26.13.0 <27 (.nvmrc: 26.13.0), npm 11.20.0. Run `npm ci`, then
