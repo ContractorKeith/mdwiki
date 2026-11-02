@@ -23,12 +23,12 @@ async function session(t) {
   return { peer, cwd };
 }
 
-test('real MCP initializes, lists exactly M1 tools, rejects unknown tools and handles concurrent requests', async (t) => {
+test('real MCP initializes, lists exactly M2 tools, rejects unknown tools and handles concurrent requests', async (t) => {
   const { peer, cwd } = await session(t);
   const [list, ping] = await Promise.all([
     peer.request(2, 'tools/list', {}), peer.request(3, 'ping'),
   ]);
-  assert.deepEqual(list.result.tools.map((tool) => tool.name), ['mdwiki_list', 'mdwiki_tree', 'mdwiki_read']);
+  assert.deepEqual(list.result.tools.map((tool) => tool.name), ['mdwiki_list', 'mdwiki_tree', 'mdwiki_read', 'mdwiki_search', 'mdwiki_reindex']);
   for (const tool of list.result.tools) {
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);

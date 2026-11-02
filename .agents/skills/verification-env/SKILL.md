@@ -18,13 +18,15 @@ npm 11.20.0. Run `npm ci`, then `bash scripts/accept.sh`: typecheck, lint,
 build, tests, npm pack, isolated prefix install, and installed CLI/MCP/SQLite tests.
 Individual commands and dependency rationale are in docs/DEVELOPMENT.md.
 
-M0 is merged in PR #8; M1 implements init/list/tree/read. Verify help/version,
+M0 and M1 are merged; M2 index/search is implemented pending review. Verify help/version,
 text/JSON envelopes, validation errors, real MCP initialize/list-tools (exactly
-mdwiki_list, mdwiki_tree, mdwiki_read), invalid arguments, unknown tools,
-EOF/SIGINT/SIGTERM shutdown, and the private SQLite FTS5/version seam.
+mdwiki_list, mdwiki_tree, mdwiki_read, mdwiki_search, mdwiki_reindex), invalid arguments, unknown tools,
+EOF/SIGINT/SIGTERM shutdown, and vault-bound SQLite FTS5/schema recovery.
 Installed tests use prefix/bin/mdwiki with explicit npm prefix/cache/config paths.
-Writes, indexing and search remain later milestones: add their planned checks
-when implemented, without claiming coverage from earlier milestones.
+Verify AND words/phrases, punctuation, all indexed fields, exact repeated tags,
+excerpts, stale cursors, restored-mtime edits, unreadable notes, deleted/corrupt/old
+data caches and concurrent full rebuilds. Run `npm run benchmark` for the disposable
+10,000-note baseline; see docs/BENCHMARK.md. Writes/links/watching remain later milestones.
 
 ## Isolation
 
@@ -49,9 +51,9 @@ Use the existing suite and small focused fixtures for relevant behavior:
 - Packaging: fresh npm tarball install, documented commands and bounded output.
 - Later writes: stale versions, cooperating writers, dry-run side effects,
   interruption recovery, mode preservation and cache invalidation.
-- Later index/watch: deleted/corrupt/old schema, recovery, permissions, missed
+- Index and later watch: deleted/corrupt/old schema, recovery, permissions, missed
   events and orderly shutdown.
-- Later search/graph: title/path/body/frontmatter, tags, phrases/punctuation,
+- Search and later graph: title/path/body/frontmatter, tags, phrases/punctuation,
   ambiguous links, aliases, code/comments and target changes.
 
 ## Platform evidence

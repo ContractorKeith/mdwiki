@@ -1,6 +1,6 @@
 # mdwiki — Build Plan
 
-Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2–M6 remain planned.
+Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 implemented pending review; M3–M6 remain planned.
 
 ## Goal and source of truth
 
@@ -18,7 +18,7 @@ Build process: https://app.basecamp.com/6307587/buckets/49448999/documents/10464
 |---|---|---|---|---|
 | M0 | Runnable package, harness, cache schema seam, CI | None | Installed CLI version/help and real MCP initialize/list; both CI platforms | Merged #8 |
 | M1 | Initialize, discover, list, tree, and read vault | M0 | Same fixture readable through installed CLI and MCP; boundary refusals | Merged #11 |
-| M2 | Incremental SQLite FTS search and rebuild | M1 | CLI/MCP queries, tags, pagination, external edits, cache rebuild | Planned |
+| M2 | Incremental SQLite FTS search and rebuild | M1 | CLI/MCP queries, tags, pagination, external edits, cache rebuild | Implemented, pending review |
 | M3 | Wikilinks and backlinks | M2 | Resolver fixtures, ambiguous/missing targets, graph updates via CLI/MCP | Planned |
 | M4 | Writes, adoption, conflicts, dry-run | M3 | CLI/MCP create/replace/append, YAML preservation, conflicts and preview | Planned |
 | M5 | Watch, concurrency and recovery | M4 | External change propagation, multiple processes, interruption/restart | Planned |

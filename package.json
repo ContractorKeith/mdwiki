@@ -1,7 +1,7 @@
 {
   "name": "mdwiki",
   "version": "0.1.0",
-  "description": "Local-first Markdown vault browsing through CLI and MCP",
+  "description": "Local-first Markdown vault browsing and search through CLI and MCP",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -17,6 +17,7 @@
   },
   "packageManager": "npm@11.20.0",
   "scripts": {
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "build": "tsc -p tsconfig.build.json",
