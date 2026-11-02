@@ -1,6 +1,6 @@
 # mdwiki — Build Plan
 
-Status: M0 merged in PR #8 at 7d59b05, 2026-11-02. M1 is next; M1–M6 remain planned.
+Status: M0 merged in PR #8 at 7d59b05, 2026-11-02. M1 is implemented pending review; M2–M6 remain planned.
 
 ## Goal and source of truth
 
@@ -17,7 +17,7 @@ Build process: https://app.basecamp.com/6307587/buckets/49448999/documents/10464
 | M | Outcome | Depends on | End-to-end proof | Status |
 |---|---|---|---|---|
 | M0 | Runnable package, harness, cache schema seam, CI | None | Installed CLI version/help and real MCP initialize/list; both CI platforms | Merged #8 |
-| M1 | Initialize, discover, list, tree, and read vault | M0 | Same fixture readable through installed CLI and MCP; boundary refusals | Planned |
+| M1 | Initialize, discover, list, tree, and read vault | M0 | Same fixture readable through installed CLI and MCP; boundary refusals | Implemented pending review |
 | M2 | Incremental SQLite FTS search and rebuild | M1 | CLI/MCP queries, tags, pagination, external edits, cache rebuild | Planned |
 | M3 | Wikilinks and backlinks | M2 | Resolver fixtures, ambiguous/missing targets, graph updates via CLI/MCP | Planned |
 | M4 | Writes, adoption, conflicts, dry-run | M3 | CLI/MCP create/replace/append, YAML preservation, conflicts and preview | Planned |
@@ -51,13 +51,17 @@ extends it with observable proofs and never weakens existing checks.
 
 One issue/branch/draft PR/T3 worktree thread per milestone, Sol 6.1 medium.
 Orchestrator checks the complete base-to-head diff and reruns acceptance.
-Independent standards/spec reviewers and a separate live PR attacker report
-against the pinned head. Fixes receive regression tests, rerun acceptance and
-updated CI. Use PR comments rather than self-approval. Ready only after green
-macOS/Linux checks; merge with a merge commit.
+Standards/spec review covers the full diff against the pinned head. Use ordinary
+code inspection and bounded deterministic fixture tests. Fixes receive regression
+tests, rerun acceptance and updated CI. mdwiki does not use pr-attack or
+skeptic-review, even when global skills suggest them. Use PR comments rather than
+self-approval. Ready only after green macOS/Linux checks; merge with a merge
+commit.
 
 After merge: update this plan, issue state, Basecamp card step and central worklog;
 explain what review found and proceed to the next ready milestone.
-Before a release tag, run independent skeptic passes on Linux and macOS, triage
-findings, file labelled issues for confirmed defects, fix and verify. A package
-tarball and release evidence can be completed without claiming npm publication.
+Before a release tag, verify the installed package on Linux and macOS using the
+acceptance gate and bounded deterministic fixtures for documented workflows.
+Record actual platform results, fix confirmed defects and rerun relevant checks.
+A package tarball and release evidence can be completed without claiming npm
+publication.

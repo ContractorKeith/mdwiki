@@ -1,83 +1,109 @@
 #!/usr/bin/env node
-import { failure, success } from './output.js';
+import { AppError, errorResult, success } from './output.js';
 import { version } from './metadata.js';
+import { initVault, selectVault } from './core/vault.js';
+import { operate, schemas } from './operations.js';
 
 const help = {
-  name: 'mdwiki',
-  version,
-  usage: 'mdwiki [--json] [help|version] | mdwiki mcp',
-  commands: ['help', 'version', 'mcp'],
-  options: ['--help, -h', '--version, -v', '--json'],
+  name: 'mdwiki', version,
+  usage: 'mdwiki [--vault DIR] [--index-dir DIR] [--json] COMMAND',
+  commands: ['help', 'version', 'init', 'list', 'tree', 'read', 'mcp'],
+  options: ['--help, -h', '--version, -v', '--json', '--vault DIR', '--index-dir DIR'],
 };
 const helpText = `mdwiki ${version}
 Usage: ${help.usage}
 
 Commands:
-  help       Show this help
-  version    Show package version
-  mcp        Start stdio MCP (M0: no tools)
+  help                           Show this help
+  version                        Show package version
+  init --vault DIR               Initialize an existing directory
+  list [--limit N] [--cursor T]   List exact Markdown paths (default 50, max 200)
+  tree [--depth N] [--limit N]    Browse paths (depth 3, max 200 entries)
+  read PATH                      Read a whole note (max 10 MiB)
+  mcp                            Start stdio MCP with list/tree/read tools
 
-Options:
+Options (before or after commands):
   --help, -h
   --version, -v
-  --json     Structured help/version and errors
-
-Vault commands are planned for later milestones.
+  --json                         Structured results and errors
+  --vault DIR                    Explicit vault; otherwise nearest initialized ancestor
+  --index-dir DIR                Override initialized cache location
 `;
-
-class UsageError extends Error {}
-
-// Validate all arguments before producing output, including help requests.
-function parse(args: string[]): 'help' | 'version' | 'mcp' {
-  let command: string | undefined;
-  let option: 'help' | 'version' | undefined;
-  for (const arg of args) {
+function parse(args: string[]) {
+  const options: Record<string, string> = {};
+  const positional: string[] = [];
+  let requested: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--') { positional.push(...args.slice(i + 1)); break; }
     if (arg === '--json') continue;
-    if (arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v') {
+    if (['--help', '-h', '--version', '-v'].includes(arg)) {
       const next = arg === '--help' || arg === '-h' ? 'help' : 'version';
-      if (option && option !== next) throw new UsageError('Choose help or version.');
-      option = next;
-    } else if (arg.startsWith('-')) {
-      throw new UsageError(`Unknown option: ${arg}`);
-    } else {
-      if (command) throw new UsageError(`Unexpected argument: ${arg}`);
-      if (!help.commands.includes(arg)) throw new UsageError(`Unknown command: ${arg}`);
-      command = arg;
-    }
+      if (requested && requested !== next) throw new AppError('VALIDATION_ERROR', 'Choose help or version.');
+      requested = next;
+    } else if (['--vault', '--index-dir', '--limit', '--cursor', '--depth'].includes(arg)) {
+      const value = args[++i];
+      if (!value || value.startsWith('--') || options[arg] !== undefined) throw new AppError('VALIDATION_ERROR', `Expected one value for ${arg}.`);
+      options[arg] = value;
+    } else if (arg.startsWith('-')) throw new AppError('VALIDATION_ERROR', `Unknown option: ${arg}`);
+    else positional.push(arg);
   }
-  if (command === 'mcp' && args.includes('--json')) {
-    throw new UsageError('mcp uses the stdio protocol; --json is not allowed.');
+  const original = positional[0] ?? 'help';
+  if (!help.commands.includes(original)) throw new AppError('VALIDATION_ERROR', `Unknown command: ${original}`);
+  if (original === 'mcp' && args.includes('--json')) throw new AppError('VALIDATION_ERROR', 'mcp uses the stdio protocol; --json is not allowed.');
+  if (positional.length > (original === 'read' ? 2 : 1) || (original === 'read' && positional.length !== 2)) throw new AppError('VALIDATION_ERROR', 'Unexpected or missing positional argument.');
+  if (!positional.length && !requested && Object.keys(options).length) throw new AppError('VALIDATION_ERROR', 'A command is required with vault options.');
+  for (const flag of Object.keys(options)) {
+    if (flag === '--limit' && ['list', 'tree'].includes(original)) continue;
+    if (flag === '--cursor' && original === 'list') continue;
+    if (flag === '--depth' && original === 'tree') continue;
+    if (['--vault', '--index-dir'].includes(flag)) continue;
+    throw new AppError('VALIDATION_ERROR', `Option ${flag} does not apply to ${original}.`);
   }
-  if (option) return option;
-  return (command ?? 'help') as 'help' | 'version' | 'mcp';
+  const input: Record<string, unknown> = {};
+  for (const name of ['limit', 'depth', 'cursor']) {
+    const value = options['--' + name];
+    if (value !== undefined) input[name] = name === 'cursor' ? value : /^\d+$/.test(value) ? Number(value) : NaN;
+  }
+  if (original === 'read') input.path = positional[1];
+  if (original === 'list' || original === 'tree' || original === 'read') {
+    const parsed = schemas[original].safeParse(input);
+    if (!parsed.success) throw new AppError('VALIDATION_ERROR', 'Invalid command arguments.');
+  }
+  const selection = { ...(options['--vault'] === undefined ? {} : { vault: options['--vault'] }),
+    ...(options['--index-dir'] === undefined ? {} : { indexDir: options['--index-dir'] }) };
+  return { command: requested ?? original, selection, input };
 }
-
 process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EPIPE') process.exit(0);
   process.stderr.write('OUTPUT_ERROR: Could not write stdout.\n');
   process.exit(5);
 });
-
 try {
   const args = process.argv.slice(2);
-  const command = parse(args);
+  const { command, selection, input } = parse(args);
   if (command === 'mcp') {
     const { serve } = await import('./mcp.js');
-    await serve();
+    await serve(await selectVault(selection));
   } else {
-    const data = command === 'help' ? help : { name: 'mdwiki', version };
-    process.stdout.write(args.includes('--json')
-      ? JSON.stringify(success(data)) + '\n'
-      : command === 'help' ? helpText : `mdwiki ${version}\n`);
+    const result = command === 'help' ? success(help) : command === 'version' ? success({ name: 'mdwiki', version })
+      : command === 'init' ? await initVault(selection)
+      : await operate(await selectVault(selection), command as 'list' | 'tree' | 'read', input);
+    if (args.includes('--json')) process.stdout.write(JSON.stringify(result) + '\n');
+    else if (command === 'help') process.stdout.write(helpText);
+    else if (command === 'version') process.stdout.write(`mdwiki ${version}\n`);
+    else if ('content' in result.data) process.stdout.write(result.data.content as string);
+    else if ('entries' in result.data) {
+      for (const entry of result.data.entries) process.stdout.write(entry.path + '\n');
+      if ('next_cursor' in result.data && result.data.next_cursor) process.stderr.write(`Next cursor: ${result.data.next_cursor}\n`);
+      if ('truncated' in result.data && result.data.truncated) process.stderr.write('Tree truncated; adjust --depth/--limit.\n');
+    } else process.stdout.write(`Initialized ${'vault' in result.data ? result.data.vault : ''}\n`);
+    if (!args.includes('--json')) for (const diagnostic of result.diagnostics) process.stderr.write(`${diagnostic.code}: ${diagnostic.message}\n`);
+    if (result.degraded) process.exitCode = 6;
   }
 } catch (error) {
-  const usage = error instanceof UsageError;
-  const detail = { code: usage ? 'VALIDATION_ERROR' : 'OPERATIONAL_ERROR',
-    message: usage ? error.message : 'mdwiki could not start.' };
-  if (process.argv.slice(2).includes('--json')) {
-    process.stdout.write(JSON.stringify(failure(detail)) + '\n');
-  } else {
-    process.stderr.write(`${detail.code}: ${detail.message}\n`);
-  }
-  process.exitCode = usage ? 2 : 5;
+  const result = errorResult(error);
+  if (process.argv.slice(2).includes('--json')) process.stdout.write(JSON.stringify(result) + '\n');
+  else process.stderr.write(`${result.error.code}: ${result.error.message}\n`);
+  process.exitCode = error instanceof AppError ? error.exit : 5;
 }
