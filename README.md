@@ -5,7 +5,8 @@ complement an existing editor; files remain the source of truth.
 
 Provides browsing, search, backlinks, metadata-preserving writes and watching through
 one `mdwiki` executable and eight stdio MCP tools. No accounts or runtime network
-service. v0.1 is being verified; no registry publication or release tag is claimed.
+service. v0.1.0 supports local tarball installation. See [release evidence](docs/RELEASE.md)
+for verification and registry publishing constraints.
 
 Requires Node.js **26.13.0** (supported line: >=26.13.0 <27) and npm.
 Development uses npm 11.20.0. Install a locally produced artifact:

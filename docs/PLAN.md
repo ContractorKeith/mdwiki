@@ -1,6 +1,6 @@
 # mdwiki — Build Plan
 
-Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 merged in PR #18; M6 packaging/release evidence merged in PR #19. No release tag or registry publication.
+Status: M0 (#8) and M1 (#11, fba0eca) merged, 2026-11-02. M2 merged in PR #15; M3 is merged in PR #16; M4 merged in PR #17; M5 merged in PR #18; M6 packaging/release evidence merged in PR #19. Published tags/artifacts are tracked in GitHub releases; registry prerequisites are in docs/RELEASE.md.
 
 ## Goal and source of truth
 
@@ -78,3 +78,11 @@ All milestone issues are complete. Before registry publication, resolve package
 name claimability and authenticated publisher access; E404/isolated ENEEDAUTH do not
 establish either. No tag/publication occurred. Development audit findings and
 performance/filesystem limits remain documented in DEVELOPMENT and RELEASE.
+
+## v0.1.0 release preparation
+
+PR #21 addressed the reproduced transient index-read conflict; parent 72 source
++ 72 installed tests and final-head Linux/macOS CI passed. The v0.1.0 changelog and
+packaged artifact require a final candidate gate before tagging. Published artifacts
+and tags are recorded at [GitHub Releases](https://github.com/ContractorKeith/mdwiki/releases).
+Npm registry publishing remains subject to authenticated access and name ownership.
