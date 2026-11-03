@@ -85,3 +85,25 @@ The local fix gate passed `npm ci`, typecheck, lint, build, all 72 source and 72
 fresh-installed tests (all previous 70 retained), and `git diff --check`.
 The unchanged serial benchmark stayed within its original budgets; actual timings
 and measurement limits are recorded in [BENCHMARK.md](BENCHMARK.md#issue-20-index-read-retry-verification).
+
+## v0.1.0 candidate integration
+
+Issue #20 was addressed in PR #21, merged as `225b4db` with a tree identical to
+`8de4626`. Parent full-diff review, 72 source + 72 installed tests and all exact-head
+Linux/macOS jobs passed. Persistent conflict diagnostics remain visible; the original
+macOS interleaving cannot be recovered from its generic log.
+
+Parent benchmark investigation retained all results: initial fixed cold/unchanged/
+search 25452/23016/16599 ms under host load 17.04 on 16 logical CPUs; pre-fix comparison
+12819/30843/22870 ms also exceeded budgets. Fixed repeat 15538/12073/11533 ms met
+all budgets; peak RSS 132.9/103.2/103.4 MiB. Same 10k fixture, Node 26.13.0/npm 11.20.0,
+owned btrfs scratch; all results correct and scratch cleaned. These runs do not
+isolate code effects or prove timing equivalence. No specific regression established.
+
+This candidate adds the versioned changelog and ships it in the tarball. Run the
+complete gate on this commit and require both-platform CI before tagging. Retain
+the final tarball/checksum with the GitHub release. Tag/release URLs and npm status
+are external records; their absence must not be interpreted as publication.
+The configured npm client returned ENEEDAUTH on 2026-11-03; authenticated access and
+name claimability still must be established before registry publication. A GitHub
+tarball release can be installed independently of npm registry publication.

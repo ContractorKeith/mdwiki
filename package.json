@@ -11,6 +11,7 @@
     "dist/",
     "README.md",
     "LICENSE",
+    "CHANGELOG.md",
     "docs/USAGE.md",
     "docs/AGENTS.md",
     "docs/DEVELOPMENT.md",
