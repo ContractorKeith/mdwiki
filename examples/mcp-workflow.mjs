@@ -63,6 +63,8 @@ try {
     assert.deepEqual(JSON.parse(reply.result.content[0].text), result);
     assert.equal(result.schema_version, 1);
     assert.equal(result.ok, !error);
+    assert.equal(result.degraded, false, JSON.stringify(result));
+    assert.deepEqual(result.diagnostics, []);
     console.log(JSON.stringify({ tool: name, result }));
     return result;
   };
@@ -77,7 +79,9 @@ try {
   await call('append', { path: 'new.md', content: 'needle\n' });
   assert.equal((await call('search', { query: 'needle', tags: [], limit: 50 })).data.entries[0].path, 'new.md');
   assert.equal((await call('backlinks', { path: 'target.md' })).data.entries[0].path, 'source.md');
-  await call('reindex', { full: true });
+  assert.equal((await call('reindex', { full: true })).data.added, 3);
+  assert.deepEqual((await call('search', { query: 'needle' })).data.entries.map(entry => entry.path), ['new.md']);
+  assert.deepEqual((await call('backlinks', { path: 'target.md' })).data.entries.map(entry => entry.path), ['source.md']);
   assert.match((await call('read', { path: 'new.md' })).data.content, /needle/);
   child.stdin.end();
   assert.equal(await closed, 0);

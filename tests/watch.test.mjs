@@ -380,3 +380,77 @@ test('queued post-publication reconciliation marks an in-flight indexed response
     assert.equal(result.data.entries.length, 1); await queued;
   } finally { mock.mock.restore(); syncBuiltinESMExports(); }
 });
+
+test('atomic publication during an open note read settles without a transient degraded event', async t => {
+  const { scope, selected, vault, put } = await fixture(t);
+  const { mutate } = await import(pathToFileURL(join(core, 'core/mutations.js')));
+  const { readRawNote } = await import(pathToFileURL(join(core, 'core/notes.js')));
+  await put('a.md', 'oldword');
+  const originalNote = await readRawNote(selected, 'a.md');
+  const emitted = [];
+  let dirty;
+  const session = new WatchSession(selected, { interval: 60000,
+    attach: async (_vault, changed) => { dirty = changed; return { close() {} }; },
+    emit: e => emitted.push(e) });
+  scope.after(() => session.close());
+  await session.run();
+  const original = fs.open;
+  let publications = 0;
+  const mock = t.mock.method(fs, 'open', async (path, ...args) => {
+    const handle = await original(path, ...args);
+    if (path === join(vault, 'a.md') && publications === 0) {
+      publications++;
+      // Pin the old open inode, then publish through the real mutation seam.
+      await mutate(selected, { path: 'a.md', content: 'newword', expected_version: originalNote.content_version });
+      dirty();
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try {
+    const result = await session.run({ search: { query: 'newword' } });
+    assert.equal(publications, 1);
+    assert.deepEqual(result.data.entries.map(e => e.path), ['a.md']);
+    assert.equal(result.degraded, false);
+    assert.deepEqual(result.diagnostics, []);
+    assert.deepEqual(emitted.filter(e => e.data.code === 'INDEX_DEGRADED'), []);
+    const rebuilt = await session.run({ full: true });
+    assert.equal(rebuilt.data.added, 1); assert.equal(rebuilt.degraded, false);
+    assert.equal((await session.run({ search: { query: 'oldword' } })).data.entries.length, 0);
+  } finally { mock.mock.restore(); syncBuiltinESMExports(); }
+});
+
+test('repeated replacement conflicts stay bounded, exclude stale data and report diagnostics', async t => {
+  const { scope, selected, vault, put } = await fixture(t);
+  await put('a.md', 'stalecontent');
+  const emitted = [];
+  const session = new WatchSession(selected, { interval: 60000,
+    attach: async () => ({ close() {} }), emit: e => emitted.push(e) });
+  scope.after(() => session.close());
+  await session.run();
+  const original = fs.open;
+  let replacements = 0;
+  const mock = t.mock.method(fs, 'open', async (path, ...args) => {
+    const handle = await original(path, ...args);
+    if (path === join(vault, 'a.md')) {
+      replacements++;
+      const temporary = join(vault, '.replacement');
+      await writeFile(temporary, 'currentcontent');
+      await rename(temporary, path);
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try {
+    const result = await session.run({ search: { query: 'stalecontent' } });
+    assert.equal(replacements, 2);
+    assert.deepEqual(result.data.entries, []);
+    assert.equal(result.degraded, true);
+    assert.equal(result.diagnostics[0].path, 'a.md');
+    assert.equal(result.diagnostics[0].code, 'CONFLICT');
+    assert.equal(emitted.filter(e => e.data.code === 'INDEX_DEGRADED').length, 1);
+  } finally { mock.mock.restore(); syncBuiltinESMExports(); }
+  const recovered = await session.run({ search: { query: 'currentcontent' } });
+  assert.deepEqual(recovered.data.entries.map(e => e.path), ['a.md']);
+  assert.equal(recovered.degraded, false);
+});

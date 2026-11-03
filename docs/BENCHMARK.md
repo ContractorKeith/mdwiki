@@ -158,3 +158,19 @@ watch-scale, mutation-throughput or macOS performance claim is made. Local Linux
 artifact verification does not substitute for actual macOS/Linux CI and parent
 release checks. Raw measurement and artifact manifest/checksum accompany the M6
 PR handoff; scratch fixtures are removed after their workers exit.
+
+## Issue #20 index-read retry verification
+
+Ran the unchanged benchmark serially after the 72-source/72-installed acceptance
+gate on 2026-11-03, Omarchy Linux x64, kernel 7.2.8-9-omarchy, Ryzen 7 7730U,
+16 logical CPUs, 13.5 GiB RAM, Node v26.13.0/npm 11.20.0. Owned mkdtemp TMPDIR
+was under `/home/contractorkeith/.cache/mdwiki-release-fix` on `/home` btrfs, with
+explicit owned npm cache/config/prefix because shared `/tmp` has quota limits.
+The unchanged fixture had 10,000 notes/100 folders, 10,476,780 note bytes and
+31,334,060 total logical bytes. Cold index: 21,113 ms / 134.4 MiB RSS (10,000 added);
+unchanged sync: 14,214 ms / 104.0 MiB (10,000 unchanged, zero added); search including
+sync: 11,958 ms / 111.9 MiB (50 hits). All remain within the existing
+25/20/22-second and 256-MiB budgets. This single run does not isolate code effects
+from host load; the fixture exercises no concurrent replacements, graph-heavy
+work or long-lived watching. No macOS performance claim. The retry is tested
+separately through bounded deterministic publication fixtures.
