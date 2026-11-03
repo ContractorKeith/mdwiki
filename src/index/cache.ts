@@ -42,7 +42,15 @@ async function reconcile(vault: Vault, db: DatabaseSync, full: boolean) {
     for (const { path } of discovered.notes) {
       seen.add(path);
       let raw: Awaited<ReturnType<typeof readRawNote>>;
-      try { raw = await readRawNote(vault, path); }
+      try {
+        try { raw = await readRawNote(vault, path); }
+        catch (error) {
+          // Atomic publication can replace an open inode. Retry once through all
+          // path/read checks; persistent conflicts still exclude the note below.
+          if (!(error instanceof AppError) || error.code !== 'CONFLICT') throw error;
+          raw = await readRawNote(vault, path);
+        }
+      }
       catch (error) {
         const code = error instanceof AppError ? error.code : (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'NOT_FOUND' : 'UNREADABLE_NOTE';
         const message = code === 'NOT_FOUND' ? 'Note disappeared during reconciliation; retry.' : 'Note could not be read; excluded from current search results.';

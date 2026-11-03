@@ -46,3 +46,42 @@ No graph-heavy, watch-scale or mutation-throughput benchmark exists. Network/vir
 watch reliability and the uncoordinated-editor publication race remain documented
 limits. Local M6 results are recorded in BENCHMARK.md and the draft PR; CI and parent
 review remain independent release gates.
+
+## Issue #20: intermittent installed MCP diagnostic
+
+The failed macOS main run [41511121923, job 125502910143](https://github.com/ContractorKeith/mdwiki/actions/runs/41511121923/job/125502910143)
+at `623154465785fa9fe5e1e8f5dcd42a853aa22004` completed all workflow tool calls,
+including a clean three-note full rebuild and final read. Its installed example
+then failed the exact empty-stderr assertion on a generic `INDEX_DEGRADED` line.
+The log contains no per-note diagnostic for that background pass, so its precise
+origin cannot be recovered. Earlier green PR #19 evidence remains valid for that
+head; it does not resolve this later failure.
+
+A deterministic Linux fixture reproduces the same diagnostic followed by a clean
+response: open the old note inode, publish a replacement through the real mutation
+operation, then resume the index read. The boundary check correctly raises
+`CONFLICT`; previously the index immediately excluded the note and emitted a
+transient degraded event before the watcher's dirty-pass reconciliation recovered.
+This is a supported cause consistent with the CI symptom, not proof of the original
+macOS interleaving or a persistent corrupt index.
+
+Index reads now retry a `CONFLICT` once through all existing path and bounded-read
+checks. A second conflict still excludes stale data and reports diagnostics;
+permission, encoding, size, path and frontmatter failures keep their diagnostics.
+The regression fails before the fix specifically on the unwanted degraded event,
+then passes with current search data and a clean full rebuild. A separate repeated
+atomic-replacement fixture proves the two-attempt bound, stale-content exclusion,
+visible conflict diagnostic and recovery. Existing unreadable-note checks remain.
+The shipped MCP example retains exact empty stderr, requires clean structured
+results, and verifies all three notes plus search/backlinks after a fresh rebuild.
+
+Use the source/installed gate and unchanged benchmark to verify this runtime change.
+Local evidence is Omarchy Linux, Node v26.13.0/npm 11.20.0, with owned `/home`
+btrfs TMPDIR and explicit npm cache/config/prefix; shared `/tmp` has quota limits.
+No local macOS verification is claimed. Final-head Linux/macOS CI and parent release
+verification are still required; no tag or publication is authorized by this fix.
+
+The local fix gate passed `npm ci`, typecheck, lint, build, all 72 source and 72
+fresh-installed tests (all previous 70 retained), and `git diff --check`.
+The unchanged serial benchmark stayed within its original budgets; actual timings
+and measurement limits are recorded in [BENCHMARK.md](BENCHMARK.md#issue-20-index-read-retry-verification).
